@@ -1,0 +1,16 @@
+M1 core: z(High-band fraction) ~ n_atom_primitive + cv_bond + sigma_chi + soap_intra_species_dispersion
+n=1803, R2=0.190, adj R2=0.189, SE=cluster (G=1739 clusters)
+predictors z-scored, response z-scored: coefficients are standardised betas
+
+                                 beta      se       p   ci_lo   ci_hi
+const                         -0.0000  0.0219  1.0000 -0.0429  0.0429
+n_atom_primitive               0.2246  0.0304  0.0000  0.1650  0.2842
+cv_bond                       -0.0493  0.0219  0.0247 -0.0923 -0.0063
+sigma_chi                      0.3362  0.0301  0.0000  0.2772  0.3952
+soap_intra_species_dispersion  0.0023  0.0236  0.9210 -0.0440  0.0486
+
+VIF (>5 worrying, >10 severe):
+n_atom_primitive                 1.30
+cv_bond                          1.04
+sigma_chi                        1.06
+soap_intra_species_dispersion    1.25

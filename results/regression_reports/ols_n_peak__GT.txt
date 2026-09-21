@@ -1,0 +1,16 @@
+GT: N_Raman + core: z(ln N_peak) ~ n_raman_active_modes + cv_bond + sigma_chi + soap_intra_species_dispersion
+n=1795, R2=0.213, adj R2=0.211, SE=cluster (G=1731 clusters)
+predictors z-scored, response z-scored: coefficients are standardised betas
+
+                                 beta      se       p   ci_lo   ci_hi
+const                          0.0000  0.0216  1.0000 -0.0423  0.0423
+n_raman_active_modes           0.3208  0.0273  0.0000  0.2672  0.3744
+cv_bond                       -0.0359  0.0210  0.0874 -0.0772  0.0053
+sigma_chi                      0.3002  0.0262  0.0000  0.2488  0.3517
+soap_intra_species_dispersion -0.0161  0.0210  0.4425 -0.0574  0.0251
+
+VIF (>5 worrying, >10 severe):
+n_raman_active_modes             1.28
+cv_bond                          1.07
+sigma_chi                        1.04
+soap_intra_species_dispersion    1.21

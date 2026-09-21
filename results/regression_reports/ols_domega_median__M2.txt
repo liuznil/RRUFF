@@ -1,0 +1,28 @@
+M2 extended: z(ln Median peak spacing) ~ n_atom_primitive + cv_bond + sigma_chi + soap_intra_species_dispersion + degeneracy_fraction + raman_channel_entropy + mass_contrast + mean_cn + mean_delta_chi_bond + mean_reduced_mass
+n=1800, R2=0.057, adj R2=0.052, SE=cluster (G=1736 clusters)
+predictors z-scored, response z-scored: coefficients are standardised betas
+
+                                 beta      se       p   ci_lo   ci_hi
+const                          0.0000  0.0230  1.0000 -0.0451  0.0451
+n_atom_primitive              -0.1306  0.0305  0.0000 -0.1904 -0.0707
+cv_bond                       -0.0148  0.0298  0.6190 -0.0733  0.0436
+sigma_chi                     -0.2540  0.0798  0.0015 -0.4106 -0.0974
+soap_intra_species_dispersion  0.0534  0.0257  0.0377  0.0030  0.1037
+degeneracy_fraction            0.1541  0.0282  0.0000  0.0989  0.2094
+raman_channel_entropy          0.1199  0.0225  0.0000  0.0757  0.1640
+mass_contrast                  0.0004  0.0237  0.9882 -0.0461  0.0468
+mean_cn                        0.0622  0.0306  0.0421  0.0022  0.1222
+mean_delta_chi_bond            0.2130  0.0662  0.0013  0.0833  0.3428
+mean_reduced_mass             -0.0980  0.0461  0.0336 -0.1883 -0.0076
+
+VIF (>5 worrying, >10 severe):
+n_atom_primitive                  1.55
+cv_bond                           1.36
+sigma_chi                        10.28
+soap_intra_species_dispersion     1.32
+degeneracy_fraction               1.23
+raman_channel_entropy             1.08
+mass_contrast                     1.17
+mean_cn                           1.44
+mean_delta_chi_bond               8.47
+mean_reduced_mass                 2.33

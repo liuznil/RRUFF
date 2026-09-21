@@ -1,0 +1,28 @@
+{
+  "args": {
+    "csv": "results\\dataset.csv",
+    "out": "results_pub",
+    "qualities": "['excellent', 'fair']",
+    "min_snr": "20",
+    "min_peaks": "3",
+    "orientation": "unoriented",
+    "seed": "0",
+    "cv_folds": "5",
+    "repeats": "3",
+    "n_boot": "300",
+    "n_perm": "5",
+    "n_stab": "100",
+    "min_family_size": "15",
+    "formats": "['png', 'pdf']",
+    "fast": "False",
+    "skip_sensitivity": "False",
+    "umap": "False",
+    "dpi": "300",
+    "fig_titles": "False",
+    "paper_mode": "True"
+  },
+  "python": "3.14.3",
+  "numpy": "2.5.3",
+  "pandas": "3.0.5",
+  "n": 1842
+}

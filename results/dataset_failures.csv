@@ -1,0 +1,65 @@
+mineral_norm,stage,category,detail
+aerinite,structure,parse_failed,Aerinite__0007027.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+allabogdanite,raman,no_peaks,Allabogdanite__R070012__Raman__532______Raman_Data_Processed__a5f49a771e29ac8dedccec154fe4.txt: no_peaks
+alloriite,structure,symmetry_failed,Alloriite__0012512.cif: symmetry_failed: SymmetryUndeterminedError: Unable to determine symmetry; soap_on_non_idealised_cell
+alterite,structure,parse_failed,Alterite__0021252.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+ammoniojarosite,structure,symmetry_failed,Ammoniojarosite__0014580.cif: symmetry_failed: SymmetryUndeterminedError: Unable to determine symmetry; soap_on_non_idealised_cell
+asgruvanitece,structure,symmetry_failed,Asgruvanite-(Ce)__0021809.cif: symmetry_failed: SymmetryUndeterminedError: Unable to determine symmetry; soap_on_non_idealised_cell
+aspedamite,structure,parse_failed,Aspedamite__0021339.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+bannisterite,structure,parse_failed,Bannisterite__0012233.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+barlowite,structure,parse_failed,Barlowite__0020634.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+bavsiite,structure,parse_failed,Bavsiite__0021297.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+belovitece,structure,parse_failed,Belovite-(Ce)__0005690.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+bendadaite,structure,parse_failed,Bendadaite__0015896.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+benjaminite,structure,parse_failed,Benjaminite__0005170.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+benyacarite,structure,parse_failed,Benyacarite__0011061.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+bobmeyerite,structure,parse_failed,Bobmeyerite__0019796.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+cervandonitece,structure,symmetry_failed,Cervandonite-(Ce)__0006185.cif: symmetry_failed: SymmetryUndeterminedError: Unable to determine symmetry; soap_on_non_idealised_cell
+cherokeeite,structure,parse_failed,Cherokeeite__0021527.cif: parse_failed: parse: len(items)=129 is not a multiple of n=25 | fallback: len(items)=129 is not a multiple of n=25 | repair: len(items)=129 is not a multiple of n=25
+christofschaferitece,structure,parse_failed,Christofschaferite-(Ce)__0020048.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+clinofergusonitey,structure,parse_failed,Clinofergusonite-(Y)__0005036.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+cuprozheshengite,structure,parse_failed,Cuprozheshengite__0021605.cif: parse_failed: parse: len(items)=134 is not a multiple of n=19 | fallback: len(items)=134 is not a multiple of n=19 | repair: Invalid CIF file with no structures!
+dietrichite,structure,parse_failed,Dietrichite__0007025.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+ekatite,structure,symmetry_failed,Ekatite__0006895.cif: symmetry_failed: SymmetryUndeterminedError: Unable to determine symmetry; soap_on_non_idealised_cell
+ferrohogbomite2n2s,structure,symmetry_failed,Ferrohogbomite-2N2S__0006950.cif: symmetry_failed: SymmetryUndeterminedError: Unable to determine symmetry; soap_on_non_idealised_cell
+ferronigerite2n1s,structure,symmetry_failed,Ferronigerite-2N1S__0018796.cif: symmetry_failed: SymmetryUndeterminedError: Unable to determine symmetry; soap_on_non_idealised_cell
+feruvite,structure,parse_failed,Feruvite__0005228.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+fluorluanshiweiite,structure,parse_failed,Fluorluanshiweiite__0021481.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+fluororichterite,structure,parse_failed,Fluoro-richterite__0000912.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+fluorsigaiite,structure,parse_failed,Fluorsigaiite__0021535.cif: parse_failed: parse: len(items)=134 is not a multiple of n=19 | fallback: len(items)=134 is not a multiple of n=19 | repair: Invalid CIF file with no structures!
+franconite,structure,parse_failed,Franconite__0020435.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+georgbarsanovite,structure,symmetry_failed,Georgbarsanovite__0012503.cif: symmetry_failed: SymmetryUndeterminedError: Unable to determine symmetry; soap_on_non_idealised_cell
+gmeliniteca,structure,symmetry_failed,Gmelinite-Ca__0015870.cif: symmetry_failed: SymmetryUndeterminedError: Unable to determine symmetry; soap_on_non_idealised_cell
+gmelinitena,structure,symmetry_failed,Gmelinite-Na__0015871.cif: symmetry_failed: SymmetryUndeterminedError: Unable to determine symmetry; soap_on_non_idealised_cell
+golyshevite,structure,symmetry_failed,Golyshevite__0012391.cif: symmetry_failed: SymmetryUndeterminedError: Unable to determine symmetry; soap_failed(ValueError): 504 atoms in primitive cell > 500
+grandaite,structure,parse_failed,Grandaite__0020474.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+heflikite,structure,parse_failed,Heflikite__0021520.cif: parse_failed: parse: len(items)=204 is not a multiple of n=29 | fallback: len(items)=204 is not a multiple of n=29 | repair: Invalid CIF file with no structures!
+hellanditece,structure,parse_failed,Hellandite-(Ce)__0002237.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+howieite,structure,parse_failed,Howieite__0000396.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+hubeite,structure,parse_failed,Hubeite__0005941.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+karlleuite,structure,parse_failed,Karlleuite__0021609.cif: parse_failed: parse: len(items)=57 is not a multiple of n=8 | fallback: len(items)=57 is not a multiple of n=8 | repair: Invalid CIF file with no structures!
+levynena,structure,symmetry_failed,Levyne-Na__0019981.cif: symmetry_failed: SymmetryUndeterminedError: Unable to determine symmetry; soap_on_non_idealised_cell
+macraeite,structure,parse_failed,Macraeite__0021450.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+magnesiohastingsite,structure,parse_failed,Magnesio-hastingsite__0010840.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+magnesiotaaffeite2n2s,structure,symmetry_failed,Magnesiotaaffeite-2N2S__0014777.cif: symmetry_failed: SymmetryUndeterminedError: Unable to determine symmetry; soap_on_non_idealised_cell
+manganiobertiite,structure,parse_failed,Mangani-obertiite__0002347.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+manganoeudialyte,structure,symmetry_failed,Manganoeudialyte__0017801.cif: symmetry_failed: SymmetryUndeterminedError: Unable to determine symmetry; soap_failed(ValueError): 600 atoms in primitive cell > 500
+maxwellite,structure,parse_failed,Maxwellite__0014873.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+motukoreaite,structure,symmetry_failed,Motukoreaite__0014801.cif: symmetry_failed: SymmetryUndeterminedError: Unable to determine symmetry; soap_on_non_idealised_cell
+moxuanxueite,structure,parse_failed,Moxuanxueite__0021785.cif: parse_failed: parse: len(items)=253 is not a multiple of n=36 | fallback: len(items)=253 is not a multiple of n=36 | repair: Invalid CIF file with no structures!
+neyite,structure,parse_failed,Neyite__0005753.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+oldsitek,structure,parse_failed,Oldsite-(K)__0021700.cif: parse_failed: parse: len(items)=64 is not a multiple of n=9 | fallback: len(items)=64 is not a multiple of n=9 | repair: Invalid CIF file with no structures!
+oneillite,structure,parse_failed,Oneillite__0005611.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+paulisite,structure,parse_failed,Paulisite__0021616.cif: parse_failed: parse: len(items)=141 is not a multiple of n=20 | fallback: len(items)=141 is not a multiple of n=20 | repair: Invalid CIF file with no structures!
+perhamite,structure,symmetry_failed,Perhamite__0014576.cif: symmetry_failed: SymmetryUndeterminedError: Unable to determine symmetry; soap_on_non_idealised_cell
+petersitece,structure,parse_failed,Petersite-(Ce)__0020978.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+pharmacoalumite,structure,symmetry_failed,Pharmacoalumite__0015630.cif: symmetry_failed: SymmetryUndeterminedError: Unable to determine symmetry; soap_on_non_idealised_cell
+pyrosmalitefe,structure,symmetry_failed,Pyrosmalite-(Fe)__0018558.cif: symmetry_failed: SymmetryUndeterminedError: Unable to determine symmetry; soap_on_non_idealised_cell
+schindlerite,raman,window_too_short,Schindlerite__R250082__Raman__532______Raman_Data_Processed__c1912ff933efb75e137fd6f15bac.txt: window_too_short
+schuilingitend,structure,parse_failed,Schuilingite-(Nd)__0005636.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+tsumebite,structure,parse_failed,Tsumebite__0014449.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+tuscanite,structure,parse_failed,Tuscanite__0000601.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+wangdaodeite,structure,symmetry_failed,Wangdaodeite__0020928.cif: symmetry_failed: SymmetryUndeterminedError: Unable to determine symmetry; soap_on_non_idealised_cell
+whiteitecafemg,structure,parse_failed,Whiteite-(CaFeMg)__0019137.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
+zheshengite,structure,parse_failed,Zheshengite__0021786.cif: parse_failed: parse: len(items)=141 is not a multiple of n=20 | fallback: len(items)=141 is not a multiple of n=20 | repair: Invalid CIF file with no structures!
+zinc,raman,no_peaks,Zinc__R070497__Raman__532______Raman_Data_Processed__e4dbb2e6efcf774107e90fdb2aca.txt: no_peaks

@@ -1,0 +1,28 @@
+M2 extended: z(Low-band fraction) ~ n_atom_primitive + cv_bond + sigma_chi + soap_intra_species_dispersion + degeneracy_fraction + raman_channel_entropy + mass_contrast + mean_cn + mean_delta_chi_bond + mean_reduced_mass
+n=1800, R2=0.360, adj R2=0.356, SE=cluster (G=1736 clusters)
+predictors z-scored, response z-scored: coefficients are standardised betas
+
+                                 beta      se       p   ci_lo   ci_hi
+const                          0.0000  0.0193  1.0000 -0.0379  0.0379
+n_atom_primitive              -0.0808  0.0271  0.0029 -0.1341 -0.0276
+cv_bond                        0.0314  0.0247  0.2029 -0.0169  0.0798
+sigma_chi                     -0.0470  0.0626  0.4531 -0.1699  0.0759
+soap_intra_species_dispersion -0.0196  0.0258  0.4474 -0.0701  0.0309
+degeneracy_fraction            0.0016  0.0239  0.9461 -0.0453  0.0485
+raman_channel_entropy         -0.0197  0.0184  0.2859 -0.0558  0.0165
+mass_contrast                 -0.0093  0.0190  0.6240 -0.0467  0.0280
+mean_cn                       -0.1041  0.0268  0.0001 -0.1566 -0.0516
+mean_delta_chi_bond           -0.1390  0.0533  0.0093 -0.2436 -0.0343
+mean_reduced_mass              0.4046  0.0383  0.0000  0.3295  0.4797
+
+VIF (>5 worrying, >10 severe):
+n_atom_primitive                  1.55
+cv_bond                           1.36
+sigma_chi                        10.28
+soap_intra_species_dispersion     1.32
+degeneracy_fraction               1.23
+raman_channel_entropy             1.08
+mass_contrast                     1.17
+mean_cn                           1.44
+mean_delta_chi_bond               8.47
+mean_reduced_mass                 2.33

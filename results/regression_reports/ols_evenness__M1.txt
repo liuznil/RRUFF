@@ -1,0 +1,16 @@
+M1 core: z(Peak-intensity evenness) ~ n_atom_primitive + cv_bond + sigma_chi + soap_intra_species_dispersion
+n=1803, R2=0.040, adj R2=0.037, SE=cluster (G=1739 clusters)
+predictors z-scored, response z-scored: coefficients are standardised betas
+
+                                 beta      se       p   ci_lo   ci_hi
+const                          0.0000  0.0234  1.0000 -0.0459  0.0459
+n_atom_primitive               0.1421  0.0281  0.0000  0.0869  0.1972
+cv_bond                       -0.0037  0.0236  0.8748 -0.0499  0.0425
+sigma_chi                      0.0900  0.0278  0.0012  0.0354  0.1446
+soap_intra_species_dispersion  0.0451  0.0245  0.0654 -0.0029  0.0931
+
+VIF (>5 worrying, >10 severe):
+n_atom_primitive                 1.30
+cv_bond                          1.04
+sigma_chi                        1.06
+soap_intra_species_dispersion    1.25

@@ -1,0 +1,19 @@
+{
+  "main": [
+    "Figure1_framework_and_cohort",
+    "Figure2_group_theory_ceiling",
+    "Figure3_bond_geometry",
+    "Figure4_chemical_heterogeneity",
+    "Figure5_grouped_cv_decomposition",
+    "Figure6_group_importance",
+    "Figure7_integrated_framework"
+  ],
+  "supplementary": [
+    "FigureS1_qc_and_family_profile",
+    "FigureS2_full_partial_correlations",
+    "FigureS3_categorical_effects",
+    "FigureS4_regression_forest",
+    "FigureS5_lofo_extrapolation",
+    "FigureS6_sparse_pls_sensitivity"
+  ]
+}

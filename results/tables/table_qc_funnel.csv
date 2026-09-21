@@ -1,0 +1,6 @@
+step,n
+All samples,2047
+"Spectrum quality in {excellent,fair}",1905
+SNR >= 20,1880
+Detected peaks >= 3,1845
+Orientation = unoriented,1842

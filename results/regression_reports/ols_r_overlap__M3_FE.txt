@@ -1,0 +1,37 @@
+M3 extended + family FE: z(Peak overlap ratio) ~ n_atom_primitive + cv_bond + sigma_chi + soap_intra_species_dispersion + degeneracy_fraction + raman_channel_entropy + mass_contrast + mean_cn + mean_delta_chi_bond + mean_reduced_mass + FE:carbonate + FE:chromate + FE:halide + FE:oxide_hydroxide + FE:phosphate_arsenate_vanadate + FE:silicate + FE:small_families_pooled + FE:sulfate + FE:sulfide_selenide_telluride
+n=1800, R2=0.161, adj R2=0.152, SE=cluster (G=1736 clusters)
+predictors z-scored, response z-scored: coefficients are standardised betas
+
+                                  beta      se       p   ci_lo   ci_hi
+const                          -0.0139  0.1027  0.8923 -0.2153  0.1875
+n_atom_primitive                0.1947  0.0299  0.0000  0.1360  0.2533
+cv_bond                         0.0029  0.0301  0.9224 -0.0561  0.0620
+sigma_chi                      -0.0381  0.0965  0.6931 -0.2273  0.1511
+soap_intra_species_dispersion  -0.0078  0.0267  0.7710 -0.0600  0.0445
+degeneracy_fraction            -0.0632  0.0292  0.0307 -0.1206 -0.0059
+raman_channel_entropy          -0.1164  0.0226  0.0000 -0.1608 -0.0720
+mass_contrast                   0.0242  0.0238  0.3089 -0.0225  0.0709
+mean_cn                         0.0594  0.0315  0.0592 -0.0023  0.1212
+mean_delta_chi_bond            -0.0062  0.0684  0.9277 -0.1403  0.1279
+mean_reduced_mass               0.1627  0.0577  0.0049  0.0494  0.2760
+FE:carbonate                   -0.7385  0.1203  0.0000 -0.9745 -0.5026
+FE:chromate                     0.2330  0.2135  0.2753 -0.1857  0.6516
+FE:halide                       0.4659  0.5211  0.3714 -0.5562  1.4880
+FE:oxide_hydroxide              0.1442  0.1288  0.2632 -0.1085  0.3968
+FE:phosphate_arsenate_vanadate  0.2072  0.1050  0.0486  0.0013  0.4131
+FE:silicate                     0.1367  0.0991  0.1680 -0.0577  0.3311
+FE:small_families_pooled       -0.9846  0.3226  0.0023 -1.6174 -0.3518
+FE:sulfate                     -0.5108  0.1177  0.0000 -0.7416 -0.2800
+FE:sulfide_selenide_telluride   0.0719  0.2796  0.7970 -0.4764  0.6202
+
+VIF (>5 worrying, >10 severe):
+n_atom_primitive                  1.55
+cv_bond                           1.36
+sigma_chi                        10.28
+soap_intra_species_dispersion     1.32
+degeneracy_fraction               1.23
+raman_channel_entropy             1.08
+mass_contrast                     1.17
+mean_cn                           1.44
+mean_delta_chi_bond               8.47
+mean_reduced_mass                 2.33

@@ -1,0 +1,16 @@
+M1 core: z(Mapping efficiency eta) ~ n_atom_primitive + cv_bond + sigma_chi + soap_intra_species_dispersion
+n=1795, R2=0.220, adj R2=0.218, SE=cluster (G=1731 clusters)
+predictors z-scored, response z-scored: coefficients are standardised betas
+
+                                 beta      se       p   ci_lo   ci_hi
+const                         -0.0000  0.0217  1.0000 -0.0425  0.0425
+n_atom_primitive              -0.4586  0.0683  0.0000 -0.5925 -0.3247
+cv_bond                       -0.1137  0.0197  0.0000 -0.1523 -0.0751
+sigma_chi                      0.0544  0.0408  0.1833 -0.0257  0.1345
+soap_intra_species_dispersion  0.0410  0.0181  0.0234  0.0055  0.0765
+
+VIF (>5 worrying, >10 severe):
+n_atom_primitive                 1.28
+cv_bond                          1.04
+sigma_chi                        1.06
+soap_intra_species_dispersion    1.24

@@ -1,0 +1,5 @@
+spec,n,n_strong_pairs_main,frac_same_sign,frac_same_sign_and_q_lt_0p05,spearman_of_all_rho_vs_main
+SNR>=10,1864,32,1.0,1.0,0.999064904780412
+SNR>=40,1781,32,1.0,1.0,0.998909444228527
+peaks>=2,1872,32,1.0,1.0,0.9975452778857365
+peaks>=5,1720,32,1.0,1.0,0.9897808006218421

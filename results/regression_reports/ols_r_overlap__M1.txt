@@ -1,0 +1,16 @@
+M1 core: z(Peak overlap ratio) ~ n_atom_primitive + cv_bond + sigma_chi + soap_intra_species_dispersion
+n=1803, R2=0.028, adj R2=0.026, SE=cluster (G=1739 clusters)
+predictors z-scored, response z-scored: coefficients are standardised betas
+
+                                 beta      se       p   ci_lo   ci_hi
+const                          0.0000  0.0235  1.0000 -0.0460  0.0460
+n_atom_primitive               0.1293  0.0275  0.0000  0.0754  0.1832
+cv_bond                        0.0782  0.0241  0.0012  0.0310  0.1254
+sigma_chi                     -0.0563  0.0303  0.0632 -0.1157  0.0031
+soap_intra_species_dispersion  0.0072  0.0261  0.7829 -0.0439  0.0583
+
+VIF (>5 worrying, >10 severe):
+n_atom_primitive                 1.30
+cv_bond                          1.04
+sigma_chi                        1.06
+soap_intra_species_dispersion    1.25

@@ -1,0 +1,28 @@
+M2 extended: z(ln Mean linewidth gamma) ~ n_atom_primitive + cv_bond + sigma_chi + soap_intra_species_dispersion + degeneracy_fraction + raman_channel_entropy + mass_contrast + mean_cn + mean_delta_chi_bond + mean_reduced_mass
+n=1800, R2=0.066, adj R2=0.061, SE=cluster (G=1736 clusters)
+predictors z-scored, response z-scored: coefficients are standardised betas
+
+                                 beta      se       p   ci_lo   ci_hi
+const                          0.0000  0.0231  1.0000 -0.0453  0.0453
+n_atom_primitive               0.1536  0.0298  0.0000  0.0952  0.2121
+cv_bond                        0.0234  0.0250  0.3491 -0.0256  0.0723
+sigma_chi                     -0.1561  0.0723  0.0311 -0.2979 -0.0142
+soap_intra_species_dispersion  0.0547  0.0249  0.0279  0.0060  0.1035
+degeneracy_fraction            0.0769  0.0278  0.0057  0.0224  0.1313
+raman_channel_entropy         -0.0252  0.0231  0.2758 -0.0704  0.0201
+mass_contrast                  0.0242  0.0238  0.3086 -0.0224  0.0709
+mean_cn                        0.1164  0.0293  0.0001  0.0588  0.1739
+mean_delta_chi_bond            0.2154  0.0642  0.0008  0.0894  0.3413
+mean_reduced_mass              0.1626  0.0353  0.0000  0.0934  0.2318
+
+VIF (>5 worrying, >10 severe):
+n_atom_primitive                  1.55
+cv_bond                           1.36
+sigma_chi                        10.28
+soap_intra_species_dispersion     1.32
+degeneracy_fraction               1.23
+raman_channel_entropy             1.08
+mass_contrast                     1.17
+mean_cn                           1.44
+mean_delta_chi_bond               8.47
+mean_reduced_mass                 2.33

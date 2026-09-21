@@ -1,0 +1,28 @@
+M2 extended: z(Peak-intensity evenness) ~ n_atom_primitive + cv_bond + sigma_chi + soap_intra_species_dispersion + degeneracy_fraction + raman_channel_entropy + mass_contrast + mean_cn + mean_delta_chi_bond + mean_reduced_mass
+n=1800, R2=0.075, adj R2=0.069, SE=cluster (G=1736 clusters)
+predictors z-scored, response z-scored: coefficients are standardised betas
+
+                                 beta      se       p   ci_lo   ci_hi
+const                         -0.0000  0.0230  1.0000 -0.0451  0.0451
+n_atom_primitive               0.0858  0.0312  0.0061  0.0245  0.1471
+cv_bond                       -0.0136  0.0282  0.6304 -0.0690  0.0418
+sigma_chi                     -0.1807  0.0763  0.0180 -0.3303 -0.0311
+soap_intra_species_dispersion  0.0472  0.0244  0.0531 -0.0006  0.0951
+degeneracy_fraction           -0.1104  0.0274  0.0001 -0.1642 -0.0566
+raman_channel_entropy         -0.0488  0.0224  0.0295 -0.0928 -0.0049
+mass_contrast                 -0.0199  0.0230  0.3886 -0.0651  0.0253
+mean_cn                        0.0629  0.0275  0.0223  0.0090  0.1167
+mean_delta_chi_bond            0.1457  0.0657  0.0267  0.0168  0.2745
+mean_reduced_mass             -0.1737  0.0430  0.0001 -0.2581 -0.0893
+
+VIF (>5 worrying, >10 severe):
+n_atom_primitive                  1.55
+cv_bond                           1.36
+sigma_chi                        10.28
+soap_intra_species_dispersion     1.32
+degeneracy_fraction               1.23
+raman_channel_entropy             1.08
+mass_contrast                     1.17
+mean_cn                           1.44
+mean_delta_chi_bond               8.47
+mean_reduced_mass                 2.33

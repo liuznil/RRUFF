@@ -1,0 +1,16 @@
+M1 core: z(ln Mean linewidth gamma) ~ n_atom_primitive + cv_bond + sigma_chi + soap_intra_species_dispersion
+n=1803, R2=0.025, adj R2=0.023, SE=cluster (G=1739 clusters)
+predictors z-scored, response z-scored: coefficients are standardised betas
+
+                                 beta      se       p   ci_lo   ci_hi
+const                         -0.0000  0.0235  1.0000 -0.0462  0.0462
+n_atom_primitive               0.0903  0.0283  0.0015  0.0348  0.1458
+cv_bond                        0.0611  0.0227  0.0071  0.0166  0.1055
+sigma_chi                     -0.0221  0.0270  0.4133 -0.0751  0.0309
+soap_intra_species_dispersion  0.0701  0.0240  0.0035  0.0231  0.1172
+
+VIF (>5 worrying, >10 severe):
+n_atom_primitive                 1.30
+cv_bond                          1.04
+sigma_chi                        1.06
+soap_intra_species_dispersion    1.25

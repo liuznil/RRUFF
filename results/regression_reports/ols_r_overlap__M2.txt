@@ -1,0 +1,28 @@
+M2 extended: z(Peak overlap ratio) ~ n_atom_primitive + cv_bond + sigma_chi + soap_intra_species_dispersion + degeneracy_fraction + raman_channel_entropy + mass_contrast + mean_cn + mean_delta_chi_bond + mean_reduced_mass
+n=1800, R2=0.073, adj R2=0.068, SE=cluster (G=1736 clusters)
+predictors z-scored, response z-scored: coefficients are standardised betas
+
+                                 beta      se       p   ci_lo   ci_hi
+const                         -0.0000  0.0229  1.0000 -0.0449  0.0449
+n_atom_primitive               0.2115  0.0283  0.0000  0.1559  0.2670
+cv_bond                        0.0054  0.0286  0.8492 -0.0506  0.0615
+sigma_chi                      0.1079  0.0817  0.1869 -0.0524  0.2683
+soap_intra_species_dispersion -0.0171  0.0266  0.5190 -0.0693  0.0350
+degeneracy_fraction           -0.0870  0.0300  0.0038 -0.1458 -0.0282
+raman_channel_entropy         -0.1257  0.0234  0.0000 -0.1715 -0.0799
+mass_contrast                  0.0088  0.0232  0.7058 -0.0368  0.0544
+mean_cn                        0.0497  0.0334  0.1366 -0.0158  0.1152
+mean_delta_chi_bond           -0.0374  0.0697  0.5913 -0.1741  0.0992
+mean_reduced_mass              0.2491  0.0477  0.0000  0.1555  0.3428
+
+VIF (>5 worrying, >10 severe):
+n_atom_primitive                  1.55
+cv_bond                           1.36
+sigma_chi                        10.28
+soap_intra_species_dispersion     1.32
+degeneracy_fraction               1.23
+raman_channel_entropy             1.08
+mass_contrast                     1.17
+mean_cn                           1.44
+mean_delta_chi_bond               8.47
+mean_reduced_mass                 2.33
