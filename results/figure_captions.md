@@ -1,7 +1,7 @@
 # Figure captions (descriptive; result statements are in paper_results.md)
 
 ## Figure 1
-Study design. Crystal-structure, chemistry and Raman-spectrum data are combined; structural descriptors are grouped into size/complexity, symmetry/group theory, bond geometry, chemistry and local environment. (a) Analysis framework; (b) quality-control funnel; (c) median standardised spectral profile per chemical family.
+Study design. Raman spectra from the RRUFF Raman directory are linked to crystallographic and composition information from the RRUFF AMCSD directory; structural and composition-derived descriptors are then constructed for prediction. (a) Analysis framework; (b) quality-control funnel; (c) median standardised spectral profile per chemical family.
 
 ## Figure 2
 Group-theoretical mode availability versus observed peaks. (a) N_Raman against N_peak with the 1:1 line (all active modes resolved). (b, c) Partial Spearman association of symmetry descriptors with the peak-count residual given ln N_Raman, i.e. resolved peaks beyond what mode availability implies; the ratio eta = N_peak/N_Raman is deliberately not used because it is coupled to N_Raman by construction.
@@ -10,7 +10,7 @@ Group-theoretical mode availability versus observed peaks. (a) N_Raman against N
 Bond-geometry descriptors against spectral endpoints. Line: decile-binned median. Annotations: partial Spearman rho (adjusted for ln N_atom and ln SNR), 95% CI and BH-FDR q.
 
 ## Figure 4
-Chemical-heterogeneity descriptors against spectral endpoints (same conventions as Figure 3).
+Composition-derived chemistry descriptors against spectral endpoints (same conventions as Figure 3).
 
 ## Figure 5
 Out-of-fold R2 (grouped 5-fold CV by chemical formula) for each predictor set and spectral endpoint. Negative values (blue) are worse than predicting the mean. Measurement = SNR + excitation wavelength; Family + system = chemical family and crystal system.

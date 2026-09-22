@@ -293,7 +293,7 @@ def _collect(results, total: int):
             rows.append(row)
         else:
             failures.append((key, *fail))
-        if i % 100 == 0 or i == total:
+        if i % 500 == 0 or i == total:
             print(f"  ... {i}/{total} processed, {len(rows)} kept, {len(failures)} dropped", flush=True)
     return rows, failures
 

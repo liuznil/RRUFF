@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Structure / chemistry  ->  Raman-spectrum features : publication-grade statistical workflow
+Structural and composition-derived descriptors  ->  Raman-spectrum features : publication-grade statistical workflow
 ==========================================================================================
 整合并升级  (严谨的回归 / 群论掩码 / LOFO) 与 (质控漏斗 / 偏相关 / 置换重要性 / Lasso / PLS) .
 
-输入 : results/dataset.csv   (每行一种矿物: CIF 结构/化学描述符 + RRUFF 拉曼谱图特征)
-输出 : <out>/figures/main/*.png|pdf (7 main figures), <out>/figures/supplementary/*.png|pdf (6 supplementary figures),
-       <out>/figures_audit/*.png|pdf (full diagnostic figures), <out>/tables/*.csv, <out>/results_summary.md,
+输入 : results/dataset.csv   (每行一种矿物: RRUFF AMCSD 结构/组成描述符 + RRUFF Raman 拉曼谱图特征)
+输出 : <out>/figures/main/*.png (7 main figures), <out>/figures/supplementary/*.png (6 supplementary figures),
+       <out>/tables/*.csv, <out>/results_summary.md,
        <out>/methods_text.md (方法段落, 数值由本次运行自动填入), <out>/run_config.json
-依赖 : numpy pandas scipy scikit-learn matplotlib   (umap-learn 可选)
+依赖 : numpy pandas scipy scikit-learn matplotlib
 
 分析链条 (每一步对应一个论文小节)
   S0  质控与队列描述        质控漏斗 + Table 1 + 化学族谱画像                                  -> Fig1, Table1
@@ -24,7 +24,6 @@ Structure / chemistry  ->  Raman-spectrum features : publication-grade statistic
   S8  稀疏关系              嵌套分组 CV 的 Lasso(1-SE) + bootstrap 稳定性选择                -> Fig9
   S9  潜变量/稳健性         PLS + QC sensitivity；主要结果作为补充验证而非核心证据             -> Fig10, Table S
   S10 稳健性                在不同 SNR / 最少峰数阈值下重复偏相关, 报告符号/显著性一致率      -> Figure S6 + Table S
-  (可选) --umap             UMAP 探索性流形                                                   -> figures_audit
 
 
 用法
@@ -70,7 +69,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 # =============================================================================
 GROUPS = ["size", "sym", "bond", "chem", "soap"]
 GROUP_LABEL = {"size": "Size / complexity", "sym": "Symmetry / group theory", "bond": "Bond geometry",
-               "chem": "Chemistry", "soap": "Local environment (SOAP)"}
+               "chem": "Composition-derived chemistry", "soap": "Local environment (SOAP)"}
 # Okabe-Ito 色盲友好配色
 GROUP_COLOR = {"size": "#8C8C8C", "sym": "#0072B2", "bond": "#D55E00", "chem": "#009E73", "soap": "#CC79A7"}
 FAM_PALETTE = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#56B4E9", "#F0E442", "#8C564B",
@@ -474,7 +473,7 @@ def make_hgb(seed, fast=False):
 # 3. 出图工具
 # =============================================================================
 def set_style():
-    """Global publication style: 8-pt text, editable PDF text, restrained lines."""
+    """Global publication style: 8-pt text, restrained lines."""
     plt.rcParams.update({
         "font.family": "sans-serif", "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans"],
         "font.size": 8.0, "axes.labelsize": 8.0, "axes.titlesize": 8.5, "axes.titleweight": "bold",
@@ -482,27 +481,24 @@ def set_style():
         "axes.linewidth": 0.65, "lines.linewidth": 1.0, "patch.linewidth": 0.5,
         "axes.spines.top": False, "axes.spines.right": False,
         "figure.dpi": 120, "savefig.dpi": 300, "savefig.bbox": "tight", "savefig.pad_inches": 0.03,
-        "pdf.fonttype": 42, "ps.fonttype": 42, "svg.fonttype": "none",
         "mathtext.default": "regular", "axes.unicode_minus": False})
 
 
 class Saver:
-    """Save a figure in every requested format (PNG at DPI, vector formats untouched)."""
+    """Save publication figures as high-resolution PNG only."""
 
-    def __init__(self, fig_dir: Path, formats):
-        self.dir, self.formats = fig_dir, formats
+    def __init__(self, fig_dir: Path):
+        self.dir = fig_dir
         fig_dir.mkdir(parents=True, exist_ok=True)
 
     def __call__(self, fig, name):
-        for f in self.formats:
-            kw = {"dpi": DPI} if f in {"png", "tif", "tiff", "jpg", "jpeg"} else {}
-            fig.savefig(self.dir / f"{name}.{f}", **kw)
+        fig.savefig(self.dir / f"{name}.png", dpi=DPI)
         plt.close(fig)
 
 
 # 模块级开关 (main() 里由命令行覆盖)
 FIG_TITLES = False          # 期刊图内通常不放总标题, 由图注承担; --fig-titles 可打开
-DPI = 300                   # PNG 分辨率; PDF 为矢量
+DPI = 300                   # PNG 分辨率
 QA_LOG: list = []           # 每张图的排版检查结果
 
 
@@ -994,45 +990,8 @@ def step6b_lofo(D, feats, tg, gcol, args, oof_all, tab):
     return L, G
 
 
-def plot_predictive(Rt, Dt, G, lasso, tg, save):
-    names = [n for n in Rt.feature_set.unique() if not n.startswith("All minus")]
-    colors = {"Measurement (SNR, wavelength)": "#D9D9D9", "Categorical (family, crystal system)": "#A6A6A6",
-              **{GROUP_LABEL[g]: GROUP_COLOR[g] for g in GROUPS}, "All structure/chemistry": "#111111"}
-    fig, ax = plt.subplots(figsize=(11.5, 4.8))
-    w = 0.8 / len(names)
-    for k, n in enumerate(names):
-        d = Rt[Rt.feature_set == n].set_index("target").reindex(tg)
-        x = np.arange(len(tg)) + (k - len(names) / 2 + .5) * w
-        ax.bar(x, d.r2, w * 0.92, color=colors.get(n, "#999"), label=n,
-               yerr=[(d.r2 - d.ci_lo).clip(lower=0), (d.ci_hi - d.r2).clip(lower=0)], error_kw=dict(lw=0.7, capsize=1.2))
-    xs = np.arange(len(tg))
-    if G is not None and len(G):
-        g = G[G.feature_set == "all"].set_index("target").reindex(tg)
-        ax.scatter(xs + 0.45, g.lofo_r2_pooled, marker="D", s=30, c="gold", edgecolor="k", zorder=5,
-                   label="All features, leave-one-family-out")
-    if lasso is not None:
-        ax.scatter(xs + 0.54, [lasso[t]["r2"] if t in lasso else np.nan for t in tg], marker="o", s=26, c="white",
-                   edgecolor="k", zorder=6, label="Lasso (1-SE), nested grouped CV")
-    ax.axhline(0, color="k", lw=0.8)
-    ax.set_xticks(xs, [tlabel(t) for t in tg], rotation=25, ha="right")
-    ax.set_ylabel("Out-of-fold $R^2$")
-    ax.legend(ncol=4, frameon=False, loc="upper center", bbox_to_anchor=(0.5, -0.32))
-    ax.set_title("Predictive power of structural/chemical descriptors (bars: grouped CV by formula, 95% cluster-bootstrap CI)", loc="left")
-    save(fig, "Fig7_predictive_power")
 
 
-def plot_lofo_heat(L, save):
-    if L is None or L.empty:
-        return
-    A = L[L.feature_set == "all"]
-    piv = A.pivot(index="held_out_family", columns="target", values="skill_vs_train_mean")
-    piv = piv.loc[A.groupby("held_out_family")["n_test"].max().sort_values(ascending=False).index]
-    fig, ax = plt.subplots(figsize=(1.0 * piv.shape[1] + 3.5, 0.45 * piv.shape[0] + 2))
-    im = draw_heat(ax, piv.to_numpy(float), None, [tlabel(t) for t in piv.columns],
-                   [f"{fam_name(f)} (n={int(A[A.held_out_family == f].n_test.max())})" for f in piv.index],
-                   vmin=-1, vmax=1, fmt="{:.2f}", title="Leave-one-family-out skill score vs. training-set mean (1 = perfect, <0 worse than mean)", fs=7)
-    fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02).set_label("skill score")
-    save(fig, "FigS1_lofo_skill_by_family")
 
 
 def step7_importance(D, feats, tg, gcol, args, save, tab, Dt):
@@ -1280,7 +1239,7 @@ def step9_pls(D, feats, tg, gcol, args, save, tab):
 
 
 # =============================================================================
-# 9. S10 稳健性 / 可选 UMAP
+# 9. S10 稳健性
 # =============================================================================
 def step10_sensitivity(raw_df, args, feats, tg, covars, tab):
     specs = [(args.min_snr, args.min_peaks, "main")] + [(s, args.min_peaks, f"SNR>={s:g}") for s in (10, 40) if s != args.min_snr] \
@@ -1308,37 +1267,6 @@ def step10_sensitivity(raw_df, args, feats, tg, covars, tab):
     return S
 
 
-def figs2_umap(D, feats, save, tab):
-    try:
-        import umap
-    except ImportError:
-        print("  [skip] UMAP: umap-learn not installed")
-        return
-    from sklearn.preprocessing import StandardScaler
-    cols = [c for c in CORE_OLS if c in D]
-    sub = D.dropna(subset=cols + ["w1_distance"])
-    if len(sub) < 30:
-        return
-    emb = umap.UMAP(n_neighbors=min(15, len(sub) - 1), min_dist=0.1, random_state=42).fit_transform(
-        StandardScaler().fit_transform(sub[cols]))
-    pd.DataFrame({"family": sub["family"].values, "umap1": emb[:, 0], "umap2": emb[:, 1]}).to_csv(tab / "umap_embedding.csv", index=False)
-    cf = fam_colors(D)
-    fig, (a1, a2) = plt.subplots(1, 2, figsize=(11.5, 4.6))
-    sc = a1.scatter(emb[:, 0], emb[:, 1], c=sub["w1_distance"], cmap="magma", s=8, alpha=0.8, lw=0)
-    fig.colorbar(sc, ax=a1).set_label(tlabel("w1_distance"))
-    a2.scatter(emb[:, 0], emb[:, 1], c=[cf[f] for f in sub["family"]], s=8, alpha=0.8, lw=0)
-    a2.legend(handles=[Patch(color=cf[f], label=fam_name(f)) for f in cf], fontsize=6.5, frameon=False, loc="center left",
-              bbox_to_anchor=(1, 0.5))
-    for a, l in zip((a1, a2), "ab"):
-        a.set_xlabel("UMAP 1")
-        a.set_ylabel("UMAP 2")
-        panel(a, l, dx=-0.08)
-    save(fig, "FigS2_umap_core_predictors")
-
-
-# =============================================================================
-# 10. 自动摘要 / 方法段落
-# =============================================================================
 def md_table(df: pd.DataFrame) -> str:
     if df is None or df.empty:
         return "_(none)_"
@@ -1363,7 +1291,7 @@ SHORT_FAM = {"phosphate_arsenate_vanadate": "phosphate/As/V", "sulfide_selenide_
              "oxide_hydroxide": "oxide/hydroxide", "native_element": "native element"}
 SET_SHORT = [("Measurement (SNR, wavelength)", "Measurement"), ("Categorical (family, crystal system)", "Family + system"),
              ("Size / complexity", "Size"), ("Symmetry / group theory", "Symmetry"), ("Bond geometry", "Bond geometry"),
-             ("Chemistry", "Chemistry"), ("Local environment (SOAP)", "SOAP"), ("All structure/chemistry", "All descriptors")]
+             ("Chemistry", "Comp.-derived chemistry"), ("Local environment (SOAP)", "SOAP"), ("All structure/chemistry", "All descriptors")]
 
 # 先验假设驱动的 headline 配对: 必须在看结果之前固定. 若是看过结果后才选的, 论文中须声明为探索性.
 # eta = N_peak/N_Raman 与 N_Raman 相关的描述符(raman_mode_fraction, degeneracy_fraction, ...)存在定义性耦合, 故不作 headline.
@@ -1473,20 +1401,20 @@ def figure_qa(fig, name, overlap_frac=0.15):
     return issues
 
 
-def _save_fig(fig, out, sub, name, formats, layout=True):
+def _save_fig(fig, out, sub, name, layout=True):
     _finalize_figure(fig, layout)
     issues = figure_qa(fig, name)
     if issues:
         print(f"  [figure QA] {name}: {len(issues)} issue(s); first: {issues[0]}")
-    Saver(out / "figures" / sub, formats)(fig, name)
+    Saver(out / "figures" / sub)(fig, name)
 
 
-def _save_pubfig(fig, out, name, formats, layout=True):
-    _save_fig(fig, out, "main", name, formats, layout)
+def _save_pubfig(fig, out, name, layout=True):
+    _save_fig(fig, out, "main", name, layout)
 
 
-def _save_suppfig(fig, out, name, formats, layout=True):
-    _save_fig(fig, out, "supplementary", name, formats, layout)
+def _save_suppfig(fig, out, name, layout=True):
+    _save_fig(fig, out, "supplementary", name, layout)
 
 
 def _fmt_ci(r, digits=2):
@@ -1523,7 +1451,7 @@ def _evidence_sentences(par, Rt, Dt, Gdf, rho_gt, sens):
         yes = d[d.ci_lo > 0]
         no = d[d.ci_lo <= 0]
         if len(yes):
-            L.append("Structure/chemistry adds out-of-fold information beyond family + crystal system (paired dR2 95% CI > 0) for: "
+            L.append("Structural and composition-derived descriptors add out-of-fold information beyond family + crystal system (paired dR2 95% CI > 0) for: "
                      + "; ".join(f"{tlabel(r.target)} ({r.delta_r2:+.2f} [{r.ci_lo:+.2f}, {r.ci_hi:+.2f}])" for r in yes.itertuples()) + ".")
         if len(no):
             L.append("No detectable gain over family + crystal system (CI includes or is below 0) for: "
@@ -1534,7 +1462,7 @@ def _evidence_sentences(par, Rt, Dt, Gdf, rho_gt, sens):
             # 仅当 Measurement 自身有正的样本外解释力 (CI 下界 > 0) 且 All 明显更差时, 才称"仪器主导"
             worse = m[(m.ci_hi < 0) & m.target.map(lambda t: t in meas.index and meas.loc[t, "ci_lo"] > 0)]
             if len(worse):
-                L.append("Measurement conditions alone out-predict all structure/chemistry descriptors for: "
+                L.append("Measurement conditions alone out-predict all structural and composition-derived descriptors for: "
                          + ", ".join(tlabel(t) for t in worse.target) + " (treat these endpoints as instrument-dominated).")
     if Rt is not None and len(Rt):
         a = Rt[Rt.feature_set == "All structure/chemistry"]
@@ -1591,10 +1519,10 @@ def write_paper_results(out, args, n, par, S, Rt, Dt, Gdf, rho_gt, sens):
 
 # ---- captions: purely descriptive (no result claims); results statements live in paper_results.md ----
 MAIN_CAPTIONS = {
-    "Figure 1": "Study design. Crystal-structure, chemistry and Raman-spectrum data are combined; structural descriptors are grouped into size/complexity, symmetry/group theory, bond geometry, chemistry and local environment. (a) Analysis framework; (b) quality-control funnel; (c) median standardised spectral profile per chemical family.",
+    "Figure 1": "Study design. Raman spectra from the RRUFF Raman directory are linked to crystallographic and composition information from the RRUFF AMCSD directory; structural and composition-derived descriptors are then constructed for prediction. (a) Analysis framework; (b) quality-control funnel; (c) median standardised spectral profile per chemical family.",
     "Figure 2": "Group-theoretical mode availability versus observed peaks. (a) N_Raman against N_peak with the 1:1 line (all active modes resolved). (b, c) Partial Spearman association of symmetry descriptors with the peak-count residual given ln N_Raman, i.e. resolved peaks beyond what mode availability implies; the ratio eta = N_peak/N_Raman is deliberately not used because it is coupled to N_Raman by construction.",
     "Figure 3": "Bond-geometry descriptors against spectral endpoints. Line: decile-binned median. Annotations: partial Spearman rho (adjusted for ln N_atom and ln SNR), 95% CI and BH-FDR q.",
-    "Figure 4": "Chemical-heterogeneity descriptors against spectral endpoints (same conventions as Figure 3).",
+    "Figure 4": "Composition-derived chemistry descriptors against spectral endpoints (same conventions as Figure 3).",
     "Figure 5": "Out-of-fold R2 (grouped 5-fold CV by chemical formula) for each predictor set and spectral endpoint. Negative values (blue) are worse than predicting the mean. Measurement = SNR + excitation wavelength; Family + system = chemical family and crystal system.",
     "Figure 6": "Joint held-out permutation importance (change in R2 when an entire descriptor group is permuted jointly). Values quantify predictive information, not causal effect.",
     "Figure 7": "Proposed conceptual framework (hypothesis). Boxes are the analysed layers; arrows indicate the hypothesised direction and are tested only through the associations reported in Figures 2-6.",
@@ -1678,29 +1606,77 @@ def publication_figure_pipeline(out, args, R, D, funnel, par, cat, S, Rt, Dt, L,
     out = Path(out)
     for sub in ("main", "supplementary"):
         (out / "figures" / sub).mkdir(parents=True, exist_ok=True)
-    fm = args.formats
     W = 7.15                                              # 双栏图宽 (英寸)
+
+    # # ---------------- Figure 1 ----------------
+    # fig = plt.figure(figsize=(W, 6.2), layout="constrained")
+    # gs = fig.add_gridspec(2, 2, height_ratios=[0.95, 1.05], width_ratios=[0.85, 1.25])
+    # ax = fig.add_subplot(gs[0, :]); ax.axis("off"); ax.set_xlim(0, 1); ax.set_ylim(0, 1)
+    # panel(ax, "a", dx=0.0, dy=0.98)
+    # boxes = [
+    #     (0.04, 0.62, 0.40, 0.26, "RRUFF AMCSD\ncrystallographic + composition records"),
+    #     (0.72, 0.62, 0.22, 0.26, "RRUFF Raman\ndirectory"),
+    #     (0.01, 0.12, 0.19, 0.26, "Symmetry /\ngroup theory"),
+    #     (0.24, 0.12, 0.19, 0.26, "Bond\ngeometry"),
+    #     (0.47, 0.12, 0.19, 0.26, "Composition-derived\nchemistry"),
+    #     (0.74, 0.12, 0.23, 0.26, "Spectral endpoints\n(QC cohort)")
+    # ]
+    # for x, y, w, h, t in boxes:
+    #     ax.add_patch(Rectangle((x, y), w, h, fill=False, lw=0.9, ec="0.25"))
+    #     ax.text(x + w / 2, y + h / 2, t, ha="center", va="center", fontsize=8)
+    # arr = dict(arrowstyle="->", lw=0.9)
+    # for a0, b0 in [
+    #     ((0.14, 0.62), (0.105, 0.38)),
+    #     ((0.29, 0.62), (0.31, 0.38)),
+    #     ((0.45, 0.62), (0.56, 0.38)),
+    #     ((0.83, 0.62), (0.855, 0.38))
+    # ]:
+    #     ax.annotate("", xy=b0, xytext=a0, arrowprops=arr)
+    # for x0 in (0.20, 0.43, 0.66):                                                        # descriptor layers vs endpoints (tested)
+    #     ax.annotate("", xy=(0.74, 0.25), xytext=(x0, 0.25), arrowprops=dict(arrowstyle="->", lw=0.9, ls="--", color="0.45"))
+    # ax.text(0.5, 0.03, "dashed arrows: associations tested in this study", ha="center", fontsize=7, color="0.35")
+    # ax = fig.add_subplot(gs[1, 0])
+    # y = np.arange(len(funnel))[::-1]
+    # ax.barh(y, funnel["n"], color="0.55", height=0.62)
+    # for yi, nv in zip(y, funnel["n"]):
+    #     ax.text(nv + funnel["n"].max() * 0.02, yi, f"{int(nv)}", va="center", fontsize=7)
+    # ax.set_yticks(y, [textwrap.fill(s, 20) for s in funnel["step"]])
+    # ax.set_xlabel("Number of spectra"); ax.set_xlim(0, funnel["n"].max() * 1.2)
+    # ax.set_title("QC funnel", loc="left"); panel(ax, "b")
+    # ax = fig.add_subplot(gs[1, 1])
+    # z = (D[tg] - D[tg].mean()) / D[tg].std(); z["family"] = D["family"]
+    # prof = z.groupby("family").median(numeric_only=True); cnt = D["family"].value_counts(); prof = prof.loc[cnt.index]
+    # draw_heat(ax, prof.values, None, [tshort(t) for t in tg], [f"{fshort(f)} ({cnt[f]})" for f in prof.index],
+    #           vmin=-1.2, vmax=1.2, fmt="{:.1f}", fs=5.8, title="Median spectral profile (z-score)")
+    # panel(ax, "c")
+    # _save_pubfig(fig, out, "Figure1_framework_and_cohort")
+
 
     # ---------------- Figure 1 ----------------
     fig = plt.figure(figsize=(W, 6.2), layout="constrained")
     gs = fig.add_gridspec(2, 2, height_ratios=[0.95, 1.05], width_ratios=[0.85, 1.25])
     ax = fig.add_subplot(gs[0, :]); ax.axis("off"); ax.set_xlim(0, 1); ax.set_ylim(0, 1)
+    ax.set_title("Framework and cohort", loc="left");
     panel(ax, "a", dx=0.0, dy=0.98)
-    boxes = [(0.04, 0.62, 0.22, 0.26, "AMCSD\ncrystal structure"), (0.37, 0.62, 0.22, 0.26, "Chemistry /\nmicroprobe"),
-             (0.72, 0.62, 0.22, 0.26, "RRUFF\nRaman spectra"),
-             (0.01, 0.12, 0.19, 0.26, "Symmetry /\ngroup theory"), (0.24, 0.12, 0.19, 0.26, "Bond\ngeometry"),
-             (0.47, 0.12, 0.19, 0.26, "Chemical\nheterogeneity"), (0.74, 0.12, 0.23, 0.26, "Spectral endpoints\n(QC cohort)")]
+
+    boxes = [
+        (0.03, 0.58, 0.45, 0.30, "RRUFF AMCSD\ncrystallographic + composition records"),
+        (0.52, 0.58, 0.45, 0.30, "RRUFF Raman\nspectral library"),
+        (0.03, 0.06, 0.55, 0.30, "Symmetry / group theory + bond geometry \n + composition-derived chemistry"),
+        (0.68, 0.06, 0.29, 0.30, "Spectral endpoints\n(QC cohort)")
+    ]
     for x, y, w, h, t in boxes:
         ax.add_patch(Rectangle((x, y), w, h, fill=False, lw=0.9, ec="0.25"))
         ax.text(x + w / 2, y + h / 2, t, ha="center", va="center", fontsize=8)
+
     arr = dict(arrowstyle="->", lw=0.9)
-    for a0, b0 in [((0.11, 0.62), (0.105, 0.38)), ((0.21, 0.62), (0.31, 0.38)),          # structure -> symmetry, bond geometry
-                   ((0.42, 0.62), (0.36, 0.38)), ((0.53, 0.62), (0.56, 0.38)),            # chemistry -> bond (electroneg.), heterogeneity
-                   ((0.83, 0.62), (0.855, 0.38))]:                                       # spectra -> QC'd endpoints
-        ax.annotate("", xy=b0, xytext=a0, arrowprops=arr)
-    for x0 in (0.20, 0.43, 0.66):                                                        # descriptor layers vs endpoints (tested)
-        ax.annotate("", xy=(0.74, 0.25), xytext=(x0, 0.25), arrowprops=dict(arrowstyle="->", lw=0.9, ls="--", color="0.45"))
-    ax.text(0.5, 0.03, "dashed arrows: associations tested in this study", ha="center", fontsize=7, color="0.35")
+    # AMCSD -> descriptor block
+    ax.annotate("", xy=(0.255, 0.36), xytext=(0.255, 0.58), arrowprops=arr)
+    # Raman -> spectral endpoints
+    ax.annotate("", xy=(0.82, 0.36), xytext=(0.82, 0.58), arrowprops=arr)
+    # descriptor block -> spectral endpoints
+    ax.annotate("", xy=(0.68, 0.21), xytext=(0.58, 0.21), arrowprops=arr)
+
     ax = fig.add_subplot(gs[1, 0])
     y = np.arange(len(funnel))[::-1]
     ax.barh(y, funnel["n"], color="0.55", height=0.62)
@@ -1713,9 +1689,69 @@ def publication_figure_pipeline(out, args, R, D, funnel, par, cat, S, Rt, Dt, L,
     z = (D[tg] - D[tg].mean()) / D[tg].std(); z["family"] = D["family"]
     prof = z.groupby("family").median(numeric_only=True); cnt = D["family"].value_counts(); prof = prof.loc[cnt.index]
     draw_heat(ax, prof.values, None, [tshort(t) for t in tg], [f"{fshort(f)} ({cnt[f]})" for f in prof.index],
-              vmin=-1.2, vmax=1.2, fmt="{:.1f}", fs=5.8, title="Median spectral profile (z-score)")
+            vmin=-1.2, vmax=1.2, fmt="{:.1f}", fs=5.8, title="Median spectral profile (z-score)")
     panel(ax, "c")
-    _save_pubfig(fig, out, "Figure1_framework_and_cohort", fm)
+    _save_pubfig(fig, out, "Figure1_framework_and_cohort")
+
+
+    # # ---------------- Figure 1 ----------------
+    # fig = plt.figure(figsize=(W, 6.2), layout="constrained")
+    # gs = fig.add_gridspec(2, 2, height_ratios=[0.95, 1.05], width_ratios=[0.85, 1.25])
+    # ax = fig.add_subplot(gs[0, :]); ax.axis("off"); ax.set_xlim(0, 1); ax.set_ylim(0, 1)
+    # ax.set_title("Framework  Overview", loc="left");
+    # panel(ax, "a", dx=0.0, dy=0.98)
+
+    # boxes = [
+    #     (0.03, 0.60, 0.44, 0.28, "RRUFF AMCSD\ncrystallographic + composition records"),
+    #     (0.55, 0.60, 0.42, 0.28, "RRUFF Raman\ndirectory"),
+    #     (0.02, 0.08, 0.17, 0.28, "Symmetry /\ngroup theory"),
+    #     (0.21, 0.08, 0.17, 0.28, "Bond\ngeometry"),
+    #     (0.40, 0.08, 0.17, 0.28, "Composition-derived\nchemistry"),
+    #     (0.60, 0.08, 0.38, 0.28, "Spectral endpoints\n(QC cohort)")
+    # ]
+    # for x, y, w, h, t in boxes:
+    #     ax.add_patch(Rectangle((x, y), w, h, fill=False, lw=0.9, ec="0.25"))
+    #     ax.text(x + w / 2, y + h / 2, t, ha="center", va="center", fontsize=8)
+
+    # arr = dict(arrowstyle="->", lw=0.9)
+    # for a0, b0 in [
+    #     ((0.25, 0.60), (0.105, 0.36)),
+    #     ((0.25, 0.60), (0.295, 0.36)),
+    #     ((0.25, 0.60), (0.485, 0.36)),
+    #     ((0.76, 0.60), (0.79, 0.36))
+    # ]:
+    #     ax.annotate("", xy=b0, xytext=a0, arrowprops=arr)
+
+    # # 虚线箭头改走框体上方，避免穿过框内
+    # for x0 in (0.105, 0.295, 0.485):
+    #     ax.annotate("", xy=(0.60, 0.37), xytext=(x0, 0.37),
+    #                 arrowprops=dict(arrowstyle="->", lw=0.9, ls="--", color="0.45"))
+
+    # ax.text(0.5, 0.01, "dashed arrows: associations tested in this study",
+    #         ha="center", fontsize=7, color="0.35")
+
+    # ax = fig.add_subplot(gs[1, 0])
+    # y = np.arange(len(funnel))[::-1]
+    # ax.barh(y, funnel["n"], color="0.55", height=0.62)
+    # for yi, nv in zip(y, funnel["n"]):
+    #     ax.text(nv + funnel["n"].max() * 0.02, yi, f"{int(nv)}", va="center", fontsize=7)
+    # ax.set_yticks(y, [textwrap.fill(s, 20) for s in funnel["step"]])
+    # ax.set_xlabel("Number of spectra"); ax.set_xlim(0, funnel["n"].max() * 1.2)
+    # ax.set_title("QC funnel", loc="left"); panel(ax, "b")
+    # ax = fig.add_subplot(gs[1, 1])
+    # z = (D[tg] - D[tg].mean()) / D[tg].std(); z["family"] = D["family"]
+    # prof = z.groupby("family").median(numeric_only=True); cnt = D["family"].value_counts(); prof = prof.loc[cnt.index]
+
+    # # draw_heat(ax, prof.values, None, [tshort(t) for t in tg], [f"{fshort(f)} ({cnt[f]})" for f in prof.index],
+    # #         vmin=-1.2, vmax=1.2, fmt="{:.1f}", fs=5.8, title="Median spectral profile (z-score)")
+    
+    # draw_heat(ax, prof.values, None, [tshort(t) for t in tg], [f"{fshort(f)} ({cnt[f]})" for f in prof.index],
+    #         vmin=-1.2, vmax=1.2, fmt="{:.1f}", fs=5.8)
+        
+    # ax.set_title("Median spectral profile (z-score)", loc="left");
+    # panel(ax, "c")
+    # _save_pubfig(fig, out, "Figure1_framework_and_cohort")
+
 
     # ---------------- Figure 2: group-theory ceiling (no eta) ----------------
     fig, axs = plt.subplots(1, 3, figsize=(W, 2.9), layout="constrained")
@@ -1742,7 +1778,7 @@ def publication_figure_pipeline(out, args, R, D, funnel, par, cat, S, Rt, Dt, L,
         _scatter_binned(ax, D2, T.rename(columns={}), x, "peak_resid")
         ax.set_ylabel("ln $N_{peak}$ residual | ln $N_{Raman}$")
         ax.set_title(ttl, loc="left"); panel(ax, letter)
-    _save_pubfig(fig, out, "Figure2_group_theory_ceiling", fm)
+    _save_pubfig(fig, out, "Figure2_group_theory_ceiling")
 
     # ---------------- Figures 3-4: bond geometry / chemistry ----------------
     for name, pairs, size in (("Figure3_bond_geometry", [("mean_reduced_mass", "n_peak"), ("mean_reduced_mass", "frac_low"),
@@ -1755,7 +1791,7 @@ def publication_figure_pipeline(out, args, R, D, funnel, par, cat, S, Rt, Dt, L,
             _scatter_binned(ax, D, par, x, y); panel(ax, letter, dx=-0.16)
         for ax in axs.ravel()[len(pairs):]:
             ax.axis("off")
-        _save_pubfig(fig, out, name, fm)
+        _save_pubfig(fig, out, name)
 
     # ---------------- Figure 5: grouped-CV decomposition ----------------
     if Rt is not None and len(Rt):
@@ -1765,11 +1801,17 @@ def publication_figure_pipeline(out, args, R, D, funnel, par, cat, S, Rt, Dt, L,
         rows = [(full, short) for full, short in SET_SHORT if full in set(Rt.feature_set)]
         M = np.array([Rt[Rt.feature_set == full].set_index("target").reindex(kt).r2.to_numpy(float) for full, _ in rows])
         lim = max(0.3, float(np.nanmax(np.abs(M))))
+
+
+        # im = draw_heat(ax, M, None, [tshort(t) for t in kt], [s for _, s in rows], vmin=-lim, vmax=lim, fmt="{:.2f}", fs=6.4,
+        #                title="Grouped-CV $R^2$ by predictor set")
+
         im = draw_heat(ax, M, None, [tshort(t) for t in kt], [s for _, s in rows], vmin=-lim, vmax=lim, fmt="{:.2f}", fs=6.4,
-                       title="Grouped-CV $R^2$ by predictor set")
+                       )
+        
         fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02).set_label("out-of-fold $R^2$")
-        panel(ax, "a")
-        _save_pubfig(fig, out, "Figure5_grouped_cv_decomposition", fm)
+        # panel(ax, "a")
+        _save_pubfig(fig, out, "Figure5_grouped_cv_decomposition")
 
     # ---------------- Figure 6: joint group importance ----------------
     if Gdf is not None and len(Gdf):
@@ -1777,30 +1819,38 @@ def publication_figure_pipeline(out, args, R, D, funnel, par, cat, S, Rt, Dt, L,
         rws = [GROUP_LABEL[g] for g in GROUPS if GROUP_LABEL[g] in Gdf.index]
         A = Gdf.reindex(rws)[kt]
         fig, ax = plt.subplots(figsize=(W, 3.3), layout="constrained")
+
+        # im = draw_heat(ax, A.clip(lower=0).to_numpy(float), None, [tshort(t) for t in kt], rws,
+        #                [GROUP_COLOR[g] for g in GROUPS if GROUP_LABEL[g] in rws], vmin=0,
+        #                vmax=max(0.1, float(np.nanmax(A.to_numpy()))), cmap="YlOrRd", fmt="{:.2f}", annot_min=0.005, fs=6.4,
+        #                title="Joint held-out permutation importance")
+        
+
         im = draw_heat(ax, A.clip(lower=0).to_numpy(float), None, [tshort(t) for t in kt], rws,
                        [GROUP_COLOR[g] for g in GROUPS if GROUP_LABEL[g] in rws], vmin=0,
                        vmax=max(0.1, float(np.nanmax(A.to_numpy()))), cmap="YlOrRd", fmt="{:.2f}", annot_min=0.005, fs=6.4,
-                       title="Joint held-out permutation importance")
+                       )
+
         fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02).set_label("$\\Delta R^2$")
-        panel(ax, "a")
-        _save_pubfig(fig, out, "Figure6_group_importance", fm)
+        # panel(ax, "a")
+        _save_pubfig(fig, out, "Figure6_group_importance")
 
     # ---------------- Figure 7: conceptual framework ----------------
     fig = plt.figure(figsize=(W, 4.3)); ax = fig.add_axes([0, 0, 1, 1]); ax.axis("off")
-    stages = [(0.05, 0.56, 0.21, 0.25, "Crystal structure", "size / complexity\nsymmetry / group theory\nbond geometry"),
-              (0.39, 0.56, 0.21, 0.25, "Chemical environment", "composition\nsite mixing\nelectronegativity"),
-              (0.73, 0.56, 0.21, 0.25, "Raman mode space", "allowed modes\nfrequency distribution\nmode degeneracy"),
-              (0.22, 0.14, 0.24, 0.25, "Spectral complexity", "peak count\nspacing\nband fractions"),
-              (0.57, 0.14, 0.24, 0.25, "Band resolvability", "linewidth\noverlap\nresolved peaks")]
+    stages = [(0.04, 0.56, 0.26, 0.24, "Crystal structure", "size / complexity\nsymmetry / group theory\nbond geometry"),
+              (0.37, 0.56, 0.26, 0.24, "Composition-derived chemistry", "elemental composition\nsite mixing\nelectronegativity"),
+              (0.70, 0.56, 0.26, 0.24, "Raman mode space", "allowed modes\nfrequency distribution\nmode degeneracy"),
+              (0.22, 0.14, 0.26, 0.24, "Spectral complexity", "peak count\nspacing\nband fractions"),
+              (0.57, 0.14, 0.26, 0.24, "Band resolvability", "linewidth\noverlap\nresolved peaks")]
     for x, y, w, h, title, body in stages:
         ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=.012", fill=False, lw=1.0, ec="0.25"))
         ax.text(x + w / 2, y + h - 0.055, title, ha="center", va="center", fontsize=9, fontweight="bold")
         ax.text(x + w / 2, y + h / 2 - 0.01, body, ha="center", va="center", fontsize=7.4, linespacing=1.45)
-    for a, b in [((.26, .68), (.39, .68)), ((.60, .68), (.73, .68)), ((.83, .56), (.69, .39)), ((.45, .56), (.38, .39)), ((.46, .265), (.57, .265))]:
+    for a, b in [((.31, .68), (.36, .68)), ((.64, .68), (.69, .68)), ((.83, .55), (.69, .39)), ((.45, .55), (.38, .39)), ((.49, .265), (.56, .265))]:
         ax.annotate("", xy=b, xytext=a, arrowprops=dict(arrowstyle="->", lw=1.15))
-    ax.text(0.5, 0.04, "Proposed framework (hypothesis): arrows are tested only via the associations in Figures 2-6",
-            ha="center", va="center", fontsize=8.2, fontweight="bold")
-    _save_pubfig(fig, out, "Figure7_integrated_framework", fm, layout=False)
+    # ax.text(0.5, 0.04, "Proposed framework (hypothesis): arrows are tested only via the associations in Figures 2-6",
+            # ha="center", va="center", fontsize=8.2, fontweight="bold")
+    _save_pubfig(fig, out, "Figure7_integrated_framework", layout=False)
 
     # ---------------- Supplementary ----------------
     fig = plt.figure(figsize=(W, 3.4), layout="constrained")
@@ -1815,7 +1865,7 @@ def publication_figure_pipeline(out, args, R, D, funnel, par, cat, S, Rt, Dt, L,
     draw_heat(ax, prof.values, None, [tshort(t) for t in tg], [f"{fshort(f)} ({cnt[f]})" for f in prof.index],
               vmin=-1.2, vmax=1.2, fmt="{:.1f}", fs=5.8, title="Median spectral profile (z-score)")
     panel(ax, "b")
-    _save_suppfig(fig, out, "FigureS1_qc_and_family_profile", fm)
+    _save_suppfig(fig, out, "FigureS1_qc_and_family_profile")
 
     names = [f.name for f in FEATURES if f.name in D and D[f.name].notna().sum() >= 30 and D[f.name].nunique() > 1]
     order, cols, seps = feat_rows(names)                 # 传入列名(不是 Feat 对象) -> 修复 S2 全空
@@ -1826,7 +1876,7 @@ def publication_figure_pipeline(out, args, R, D, funnel, par, cat, S, Rt, Dt, L,
     fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02).set_label("partial $\\rho$")
     ax.set_xlabel("* q<0.05, ** q<0.01, *** q<0.001 (BH-FDR over all cells)", fontsize=7)
     panel(ax, "a")
-    _save_suppfig(fig, out, "FigureS2_full_partial_correlations", fm)
+    _save_suppfig(fig, out, "FigureS2_full_partial_correlations")
 
     if cat is not None and len(cat):
         facs = list(cat.factor.dropna().unique())
@@ -1838,13 +1888,13 @@ def publication_figure_pipeline(out, args, R, D, funnel, par, cat, S, Rt, Dt, L,
                        title="Kruskal-Wallis $\\eta^2_H$")
         fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02).set_label("$\\eta^2_H$")
         panel(ax, "a")
-        _save_suppfig(fig, out, "FigureS3_categorical_effects", fm)
+        _save_suppfig(fig, out, "FigureS3_categorical_effects")
 
     if S is not None and len(S):
         resp = [y for y in tg if y in set(S.response)]
         if resp:
             fig = _forest_grid(S, resp)
-            _save_suppfig(fig, out, "FigureS4_regression_forest", fm)
+            _save_suppfig(fig, out, "FigureS4_regression_forest")
 
     if L is not None and len(L):
         A = L[L.feature_set == "all"]
@@ -1854,7 +1904,7 @@ def publication_figure_pipeline(out, args, R, D, funnel, par, cat, S, Rt, Dt, L,
                        vmin=-1, vmax=1, fmt="{:.2f}", fs=6.0, title="Leave-one-family-out skill score")
         fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02).set_label("skill score")
         panel(ax, "a")
-        _save_suppfig(fig, out, "FigureS5_lofo_extrapolation", fm)
+        _save_suppfig(fig, out, "FigureS5_lofo_extrapolation")
 
     fig = plt.figure(figsize=(W, 7.4), layout="constrained")
     gs = fig.add_gridspec(3, 1, height_ratios=[1.7, 0.9, 0.9])
@@ -1883,13 +1933,13 @@ def publication_figure_pipeline(out, args, R, D, funnel, par, cat, S, Rt, Dt, L,
         ax.text(0.5, 0.5, "QC sensitivity not run (--fast / --skip-sensitivity)", ha="center", va="center", transform=ax.transAxes)
         ax.set_axis_off()
     ax.set_title("QC-threshold sensitivity", loc="left"); panel(ax, "c")
-    _save_suppfig(fig, out, "FigureS6_sparse_pls_sensitivity", fm)
+    _save_suppfig(fig, out, "FigureS6_sparse_pls_sensitivity")
 
     cap = ["# Figure captions (descriptive; result statements are in paper_results.md)\n"]
     cap += [f"## {k}\n{v}\n" for k, v in {**MAIN_CAPTIONS, **SUPP_CAPTIONS}.items()]
     (out / "figure_captions.md").write_text("\n".join(cap), encoding="utf-8")
-    man = {"main": sorted(p.stem for p in (out / "figures" / "main").glob("*.pdf")),
-           "supplementary": sorted(p.stem for p in (out / "figures" / "supplementary").glob("*.pdf"))}
+    man = {"main": sorted(p.stem for p in (out / "figures" / "main").glob("*.png")),
+           "supplementary": sorted(p.stem for p in (out / "figures" / "supplementary").glob("*.png"))}
     (out / "figure_manifest.json").write_text(json.dumps(man, indent=2), encoding="utf-8")
 
 
@@ -1959,7 +2009,7 @@ def write_methods(out, args, n, gcol, funnel, n_feats):
 
 **Study design and QC.** The analysis began with the complete RRUFF-derived cohort and retained spectra with quality in {{{', '.join(args.qualities)}}}, SNR >= {args.min_snr:g}, at least {args.min_peaks} detected peaks, and {args.orientation} orientation (final n = {n}). The grouping unit for all resampling-based inference and prediction was chemical formula, preventing replicate spectra of the same composition from being split across folds. Because the minimum-peak criterion conditions on a response-related quantity, sensitivity analyses repeated the association screen at SNR thresholds of 10 and 40 and peak-count thresholds of 2 and 5.
 
-**Mechanistic feature hierarchy.** Structural descriptors were explicitly partitioned into size/complexity, symmetry/group theory, bond geometry, chemistry, and local environment (SOAP). Group-theoretical descriptors were retained only when the reported crystallographic symmetry was internally consistent; otherwise the corresponding symmetry block was masked. Spectral endpoints represented complementary aspects of band complexity and resolvability: peak count, intensity evenness, mean linewidth, median peak spacing, peak overlap, low/mid/high spectral fractions, and Wasserstein distance. Mapping efficiency eta = N_peak/N_Raman was used only as an inferential endpoint and excluded from machine-learning predictors to avoid definitional leakage.
+**Mechanistic feature hierarchy.** Structural and composition-derived descriptors were explicitly partitioned into size/complexity, symmetry/group theory, bond geometry, composition-derived chemistry, and local environment (SOAP). Group-theoretical descriptors were retained only when the reported crystallographic symmetry was internally consistent; otherwise the corresponding symmetry block was masked. Spectral endpoints represented complementary aspects of band complexity and resolvability: peak count, intensity evenness, mean linewidth, median peak spacing, peak overlap, low/mid/high spectral fractions, and Wasserstein distance. Mapping efficiency eta = N_peak/N_Raman was used only as an inferential endpoint and excluded from machine-learning predictors to avoid definitional leakage.
 
 **Primary association analysis.** Rank-based partial correlations adjusted for ln N_atom and ln SNR were used to separate structural effects from size and measurement quality. Confidence intervals were calculated on the rank scale and p-values were controlled by Benjamini–Hochberg FDR at {FDR_ALPHA}. Categorical effects were quantified with Kruskal–Wallis eta-squared. The primary interpretation emphasizes effect size and confidence intervals rather than significance alone.
 
@@ -1983,7 +2033,7 @@ def main(argv=None) -> int:
     global DPI, FIG_TITLES
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--csv", type=Path, default=Path("results/dataset.csv"))
-    ap.add_argument("--out", type=Path, default=Path("results_pub"))
+    ap.add_argument("--out", type=Path, default=Path("results"))
     ap.add_argument("--qualities", nargs="+", default=["excellent", "fair"])
     ap.add_argument("--min-snr", type=float, default=20)
     ap.add_argument("--min-peaks", type=int, default=3)
@@ -1995,11 +2045,9 @@ def main(argv=None) -> int:
     ap.add_argument("--n-perm", type=int, default=5, help="置换重要性重复次数")
     ap.add_argument("--n-stab", type=int, default=100, help="Lasso 稳定性选择 bootstrap 次数")
     ap.add_argument("--min-family-size", type=int, default=15)
-    ap.add_argument("--formats", nargs="+", default=["png", "pdf"])
     ap.add_argument("--fast", action="store_true", help="调试: 1 次重复, 少量 bootstrap, 跳过消融/LOFO/稳健性")
     ap.add_argument("--skip-sensitivity", action="store_true")
-    ap.add_argument("--umap", action="store_true", help="附加 UMAP 探索图 (需 umap-learn)；仅探索性")
-    ap.add_argument("--dpi", type=int, default=300, help="PNG 分辨率 (PDF 为矢量)")
+    ap.add_argument("--dpi", type=int, default=300, help="PNG 分辨率")
     ap.add_argument("--fig-titles", action="store_true", help="在图内显示总标题 (默认不显示, 交给图注)")
     ap.add_argument("--paper-mode", action="store_true", default=True, help="生成论文核心综合图/表/结果摘要（默认开启）")
     args = ap.parse_args(argv)
@@ -2012,7 +2060,9 @@ def main(argv=None) -> int:
     for p in (tab, rep):
         p.mkdir(parents=True, exist_ok=True)
     set_style()
-    save = Saver(out / "figures_audit", args.formats)
+    # Analysis steps may construct transient diagnostic figures for in-run checks, but never save them.
+    # Only publication_figure_pipeline() writes PNG files: Figure 1–7 and Supplementary Figure S1–S6.
+    save = lambda fig, name: plt.close(fig)
 
     raw_df = read_raw(args.csv)
     d, funnel = apply_qc(raw_df, args.qualities, args.min_snr, args.min_peaks, args.orientation)
@@ -2044,20 +2094,18 @@ def main(argv=None) -> int:
     print("[S6b] leave-one-family-out");  L, G = step6b_lofo(D, feats, mtg, gcol, args, oof_all, tab)
     print("[S7] permutation importance"); Fdf, Gdf = step7_importance(D, feats, mtg, gcol, args, save, tab, Dt)
     print("[S8] Lasso (nested CV + stability)"); lasso, C, Fq = step8_lasso(D, feats, mtg, gcol, args, save, tab)
-    plot_predictive(Rt, Dt, G, lasso, mtg, save)
-    plot_lofo_heat(L, save)
     print("[S9] PLS");                    q2 = step9_pls(D, feats, mtg, gcol, args, save, tab)
     sens = None
     if not (args.fast or args.skip_sensitivity):
         print("[S10] QC sensitivity");    sens = step10_sensitivity(raw_df, args, feats, tg, covars, tab)
-    if args.umap:
-        figs2_umap(D, feats, save, tab)
 
     # 文本产出先写 (不依赖绘图), 再出投稿图: 出图失败不会丢失 summary / methods
     write_summary(out, args, funnel, len(D), gcol, par, cat, S, Rt, Dt, G, lasso, Fdf, Gdf, q2, sens, rho_gt, mtg)
     write_methods(out, args, len(D), gcol, funnel, len(feats))
     write_paper_results(out, args, len(D), par, S, Rt, Dt, Gdf, rho_gt, sens)
-    print("[PAPER] publication figure pipeline: 7 main + 6 supplementary")
+    print("[PAPER] publication figure pipeline: 7 main + 6 supplementary (PNG only)")
+
+
     try:
         publication_figure_pipeline(out, args, R, D, funnel, par, cat, S, Rt, Dt, L, G, lasso, C, Fq, q2, Gdf, rho_gt, sens, mtg)
     except Exception:

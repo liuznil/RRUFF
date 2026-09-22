@@ -1,7 +1,7 @@
 {
   "args": {
     "csv": "results\\dataset.csv",
-    "out": "results_pub",
+    "out": "results",
     "qualities": "['excellent', 'fair']",
     "min_snr": "20",
     "min_peaks": "3",
@@ -13,16 +13,14 @@
     "n_perm": "5",
     "n_stab": "100",
     "min_family_size": "15",
-    "formats": "['png', 'pdf']",
     "fast": "False",
     "skip_sensitivity": "False",
-    "umap": "False",
     "dpi": "300",
     "fig_titles": "False",
     "paper_mode": "True"
   },
   "python": "3.14.3",
-  "numpy": "2.5.3",
-  "pandas": "3.0.5",
+  "numpy": "2.4.4",
+  "pandas": "3.0.2",
   "n": 1842
 }

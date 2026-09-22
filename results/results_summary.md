@@ -29,11 +29,11 @@ Hypothesis-driven pairs fixed in code (HEADLINE_PAIRS); report as exploratory if
 | N anion-group types | ln N_peak | +0.28 [+0.23, +0.32] | <0.001 |
 
 - Group-theoretical N_Raman and observed N_peak show a weak monotonic association (Spearman rho = 0.33).
-- Structure/chemistry adds out-of-fold information beyond family + crystal system (paired dR2 95% CI > 0) for: ln N_peak (+0.07 [+0.04, +0.10]); Peak-intensity evenness (+0.03 [+0.01, +0.06]); ln Mean linewidth gamma (+0.24 [+0.20, +0.29]); ln Median peak spacing (+0.06 [+0.02, +0.10]); Peak overlap ratio (+0.08 [+0.05, +0.12]); High-band fraction (+0.04 [+0.01, +0.07]); ln W1 distance (+0.05 [+0.02, +0.08]).
+- Structural and composition-derived descriptors add out-of-fold information beyond family + crystal system (paired dR2 95% CI > 0) for: ln N_peak (+0.07 [+0.04, +0.10]); Peak-intensity evenness (+0.04 [+0.01, +0.06]); ln Mean linewidth gamma (+0.24 [+0.20, +0.29]); ln Median peak spacing (+0.06 [+0.02, +0.10]); Peak overlap ratio (+0.09 [+0.05, +0.12]); High-band fraction (+0.04 [+0.01, +0.07]); ln W1 distance (+0.05 [+0.02, +0.08]).
 - No detectable gain over family + crystal system (CI includes or is below 0) for: Low-band fraction, Mid-band fraction.
-- Measurement conditions alone out-predict all structure/chemistry descriptors for: Peak-intensity evenness (treat these endpoints as instrument-dominated).
+- Measurement conditions alone out-predict all structural and composition-derived descriptors for: Peak-intensity evenness (treat these endpoints as instrument-dominated).
 - Endpoints with out-of-fold R2 whose 95% CI excludes 0: ln N_peak (R2=0.38), Peak-intensity evenness (R2=0.09), ln Mean linewidth gamma (R2=0.26), ln Median peak spacing (R2=0.18), Peak overlap ratio (R2=0.17), Low-band fraction (R2=0.39), Mid-band fraction (R2=0.18), High-band fraction (R2=0.34), ln W1 distance (R2=0.29).
-- Largest joint-permutation group per endpoint (dR2 >= 0.02): ln N_peak: Bond geometry (dR2=0.18); Peak-intensity evenness: Bond geometry (dR2=0.10); ln Mean linewidth gamma: Chemistry (dR2=0.24); ln Median peak spacing: Symmetry / group theory (dR2=0.17); Peak overlap ratio: Bond geometry (dR2=0.13); Low-band fraction: Bond geometry (dR2=0.29); Mid-band fraction: Bond geometry (dR2=0.23); High-band fraction: Chemistry (dR2=0.32); ln W1 distance: Bond geometry (dR2=0.21).
+- Largest joint-permutation group per endpoint (dR2 >= 0.02): ln N_peak: Bond geometry (dR2=0.18); Peak-intensity evenness: Bond geometry (dR2=0.10); ln Mean linewidth gamma: Composition-derived chemistry (dR2=0.24); ln Median peak spacing: Symmetry / group theory (dR2=0.16); Peak overlap ratio: Bond geometry (dR2=0.13); Low-band fraction: Bond geometry (dR2=0.30); Mid-band fraction: Bond geometry (dR2=0.23); High-band fraction: Composition-derived chemistry (dR2=0.32); ln W1 distance: Bond geometry (dR2=0.20).
 - QC sensitivity across 4 alternative settings: sign agreement of main strong partial correlations 1.00-1.00; sign agreement with q<0.05 retained 1.00-1.00; rank agreement of the whole partial-correlation matrix 0.99-1.00.
 
 ## 1. Strongest partial correlations (adjusted for ln N_atom, ln SNR)
@@ -98,16 +98,16 @@ Hypothesis-driven pairs fixed in code (HEADLINE_PAIRS); report as exploratory if
 
 ## 4. Out-of-fold R2 [95% cluster-bootstrap CI], grouped CV
 
-| spectrum | Measurement (SNR, wavelength) | Categorical (family, crystal system) | Size / complexity | Symmetry / group theory | Bond geometry | Chemistry | Local environment (SOAP) | All structure/chemistry |
+| spectrum | Measurement (SNR, wavelength) | Categorical (family, crystal system) | Size / complexity | Symmetry / group theory | Bond geometry | Composition-derived chemistry | Local environment (SOAP) | All structure/chemistry |
 |---|---|---|---|---|---|---|---|---|
-| ln N_peak | 0.16 [0.12, 0.19] | 0.31 [0.27, 0.35] | 0.17 [0.13, 0.21] | 0.21 [0.17, 0.25] | 0.31 [0.27, 0.35] | 0.30 [0.25, 0.34] | 0.18 [0.14, 0.22] | 0.38 [0.35, 0.42] |
-| Peak-intensity evenness | 0.17 [0.14, 0.20] | 0.06 [0.03, 0.08] | 0.03 [0.00, 0.05] | 0.03 [-0.00, 0.06] | 0.07 [0.04, 0.10] | 0.09 [0.07, 0.12] | 0.03 [0.01, 0.06] | 0.09 [0.05, 0.12] |
-| ln Mean linewidth gamma | 0.08 [0.06, 0.11] | 0.01 [-0.00, 0.04] | 0.01 [-0.01, 0.03] | 0.06 [0.03, 0.08] | 0.11 [0.08, 0.14] | 0.19 [0.15, 0.23] | 0.02 [-0.01, 0.04] | 0.26 [0.22, 0.30] |
-| ln Median peak spacing | 0.04 [0.01, 0.08] | 0.12 [0.07, 0.15] | 0.03 [-0.01, 0.07] | 0.11 [0.06, 0.16] | 0.10 [0.06, 0.15] | 0.07 [0.05, 0.10] | 0.02 [-0.01, 0.05] | 0.18 [0.13, 0.23] |
-| Peak overlap ratio | 0.07 [0.04, 0.11] | 0.08 [0.06, 0.12] | 0.03 [0.00, 0.06] | 0.05 [0.02, 0.09] | 0.08 [0.05, 0.12] | 0.12 [0.08, 0.15] | 0.01 [-0.02, 0.04] | 0.17 [0.13, 0.20] |
-| Low-band fraction | 0.05 [0.01, 0.09] | 0.38 [0.33, 0.44] | 0.07 [0.04, 0.10] | 0.10 [0.06, 0.14] | 0.38 [0.32, 0.44] | 0.38 [0.32, 0.43] | 0.08 [0.04, 0.12] | 0.39 [0.33, 0.45] |
-| Mid-band fraction | -0.00 [-0.02, 0.02] | 0.18 [0.14, 0.21] | -0.02 [-0.04, 0.00] | 0.05 [0.02, 0.08] | 0.14 [0.10, 0.18] | 0.11 [0.07, 0.14] | 0.01 [-0.02, 0.04] | 0.18 [0.14, 0.21] |
-| High-band fraction | 0.02 [-0.01, 0.04] | 0.30 [0.25, 0.35] | 0.08 [0.04, 0.12] | 0.08 [0.04, 0.13] | 0.30 [0.25, 0.34] | 0.27 [0.22, 0.32] | 0.08 [0.04, 0.11] | 0.34 [0.29, 0.39] |
+| ln N_peak | 0.16 [0.12, 0.18] | 0.31 [0.27, 0.35] | 0.17 [0.13, 0.21] | 0.21 [0.17, 0.25] | 0.31 [0.27, 0.35] | 0.30 [0.26, 0.34] | 0.18 [0.14, 0.22] | 0.38 [0.34, 0.42] |
+| Peak-intensity evenness | 0.17 [0.14, 0.20] | 0.06 [0.03, 0.08] | 0.03 [0.00, 0.05] | 0.02 [-0.01, 0.05] | 0.07 [0.04, 0.10] | 0.09 [0.07, 0.12] | 0.03 [0.00, 0.06] | 0.09 [0.05, 0.12] |
+| ln Mean linewidth gamma | 0.08 [0.06, 0.11] | 0.01 [-0.00, 0.04] | 0.01 [-0.01, 0.03] | 0.06 [0.03, 0.08] | 0.11 [0.08, 0.14] | 0.19 [0.15, 0.23] | 0.01 [-0.01, 0.04] | 0.26 [0.22, 0.30] |
+| ln Median peak spacing | 0.04 [0.01, 0.08] | 0.12 [0.07, 0.15] | 0.03 [-0.01, 0.07] | 0.11 [0.06, 0.16] | 0.10 [0.06, 0.15] | 0.07 [0.05, 0.10] | 0.01 [-0.01, 0.04] | 0.18 [0.13, 0.22] |
+| Peak overlap ratio | 0.07 [0.04, 0.10] | 0.08 [0.06, 0.12] | 0.03 [0.00, 0.06] | 0.05 [0.02, 0.08] | 0.08 [0.05, 0.12] | 0.12 [0.09, 0.15] | 0.01 [-0.02, 0.04] | 0.17 [0.13, 0.21] |
+| Low-band fraction | 0.05 [0.02, 0.09] | 0.38 [0.33, 0.44] | 0.07 [0.04, 0.10] | 0.10 [0.06, 0.14] | 0.38 [0.32, 0.44] | 0.38 [0.32, 0.44] | 0.08 [0.04, 0.12] | 0.39 [0.33, 0.45] |
+| Mid-band fraction | -0.00 [-0.02, 0.02] | 0.18 [0.14, 0.21] | -0.02 [-0.04, 0.00] | 0.05 [0.02, 0.08] | 0.14 [0.10, 0.18] | 0.11 [0.07, 0.15] | 0.01 [-0.02, 0.04] | 0.18 [0.13, 0.21] |
+| High-band fraction | 0.02 [-0.01, 0.04] | 0.30 [0.25, 0.35] | 0.08 [0.04, 0.12] | 0.08 [0.05, 0.13] | 0.30 [0.25, 0.34] | 0.27 [0.23, 0.33] | 0.08 [0.04, 0.11] | 0.34 [0.29, 0.39] |
 | ln W1 distance | 0.11 [0.08, 0.14] | 0.24 [0.20, 0.28] | 0.09 [0.05, 0.12] | 0.09 [0.05, 0.13] | 0.27 [0.22, 0.31] | 0.27 [0.23, 0.31] | 0.09 [0.05, 0.12] | 0.29 [0.24, 0.33] |
 
 ### Added value of structure/chemistry over baselines (paired dR2)
@@ -115,10 +115,10 @@ Hypothesis-driven pairs fixed in code (HEADLINE_PAIRS); report as exploratory if
 | spectrum | All - Categorical | All - Measurement |
 |---|---|---|
 | ln N_peak | +0.07 [+0.04, +0.10] | +0.23 [+0.18, +0.28] |
-| Peak-intensity evenness | +0.03 [+0.01, +0.06] | -0.08 [-0.13, -0.03] |
+| Peak-intensity evenness | +0.04 [+0.01, +0.06] | -0.08 [-0.13, -0.03] |
 | ln Mean linewidth gamma | +0.24 [+0.20, +0.29] | +0.18 [+0.13, +0.22] |
 | ln Median peak spacing | +0.06 [+0.02, +0.10] | +0.14 [+0.08, +0.19] |
-| Peak overlap ratio | +0.08 [+0.05, +0.12] | +0.10 [+0.05, +0.14] |
+| Peak overlap ratio | +0.09 [+0.05, +0.12] | +0.10 [+0.06, +0.14] |
 | Low-band fraction | +0.01 [-0.03, +0.04] | +0.34 [+0.28, +0.40] |
 | Mid-band fraction | +0.00 [-0.04, +0.04] | +0.18 [+0.13, +0.22] |
 | High-band fraction | +0.04 [+0.01, +0.07] | +0.32 [+0.27, +0.38] |
@@ -131,11 +131,11 @@ Hypothesis-driven pairs fixed in code (HEADLINE_PAIRS); report as exploratory if
 | ln N_peak | 0.30 | 0.21 | 0.37 | 0.16 |
 | Peak-intensity evenness | 0.04 | 0.01 | 0.10 | 0.09 |
 | ln Mean linewidth gamma | 0.17 | 0.17 | 0.25 | 0.09 |
-| ln Median peak spacing | -0.00 | -0.04 | 0.18 | 0.22 |
-| Peak overlap ratio | 0.04 | 0.02 | 0.17 | 0.15 |
-| Low-band fraction | 0.35 | 0.27 | 0.40 | 0.12 |
-| Mid-band fraction | 0.03 | -0.01 | 0.18 | 0.19 |
-| High-band fraction | 0.29 | 0.22 | 0.34 | 0.13 |
+| ln Median peak spacing | -0.00 | -0.03 | 0.18 | 0.22 |
+| Peak overlap ratio | 0.03 | 0.00 | 0.17 | 0.16 |
+| Low-band fraction | 0.34 | 0.27 | 0.40 | 0.12 |
+| Mid-band fraction | 0.02 | -0.03 | 0.18 | 0.21 |
+| High-band fraction | 0.28 | 0.21 | 0.34 | 0.13 |
 | ln W1 distance | 0.22 | 0.16 | 0.30 | 0.15 |
 
 ## 5. Sparse relations (nested-CV Lasso; percentages = bootstrap selection frequency)
@@ -155,9 +155,9 @@ Hypothesis-driven pairs fixed in code (HEADLINE_PAIRS); report as exploratory if
 | group | ln N_peak | Peak-intensity evenness | ln Mean linewidth gamma | ln Median peak spacing | Peak overlap ratio | Low-band fraction | Mid-band fraction | High-band fraction | ln W1 distance |
 |---|---|---|---|---|---|---|---|---|---|
 | Size / complexity | 0.06 | 0.00 | 0.01 | 0.01 | 0.00 | 0.00 | 0.01 | 0.01 | 0.01 |
-| Symmetry / group theory | 0.08 | 0.03 | 0.04 | 0.17 | 0.08 | 0.01 | 0.04 | 0.01 | 0.01 |
-| Bond geometry | 0.18 | 0.10 | 0.16 | 0.08 | 0.13 | 0.29 | 0.23 | 0.17 | 0.21 |
-| Chemistry | 0.12 | 0.06 | 0.24 | 0.11 | 0.12 | 0.15 | 0.09 | 0.32 | 0.15 |
+| Symmetry / group theory | 0.09 | 0.04 | 0.04 | 0.16 | 0.08 | 0.01 | 0.03 | 0.01 | 0.01 |
+| Bond geometry | 0.18 | 0.10 | 0.16 | 0.08 | 0.13 | 0.30 | 0.23 | 0.18 | 0.20 |
+| Composition-derived chemistry | 0.12 | 0.05 | 0.24 | 0.10 | 0.12 | 0.15 | 0.09 | 0.32 | 0.15 |
 | Local environment (SOAP) | 0.01 | 0.01 | 0.02 | 0.01 | 0.01 | 0.01 | 0.03 | 0.00 | 0.02 |
 
 ## 7. PLS cumulative Q2 (grouped CV)
