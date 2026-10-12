@@ -1,0 +1,28 @@
+M2 extended: z(Spectral skewness) ~ n_atom_primitive + cv_bond + sigma_chi + soap_intra_species_dispersion + degeneracy_fraction + raman_channel_entropy + mass_contrast + mean_cn + mean_delta_chi_bond + mean_reduced_mass
+n=1797, R2=0.258, adj R2=0.254, SE=cluster (G=1733 clusters)
+predictors z-scored, response z-scored: coefficients are standardised betas
+
+                                 beta      se       p   ci_lo   ci_hi
+const                         -0.0000  0.0209  1.0000 -0.0409  0.0409
+n_atom_primitive              -0.1243  0.0276  0.0000 -0.1785 -0.0701
+cv_bond                       -0.0448  0.0270  0.0975 -0.0978  0.0082
+sigma_chi                     -0.0549  0.0709  0.4389 -0.1938  0.0841
+soap_intra_species_dispersion  0.1319  0.0265  0.0000  0.0800  0.1838
+degeneracy_fraction            0.1022  0.0249  0.0000  0.0534  0.1510
+raman_channel_entropy          0.0271  0.0212  0.2020 -0.0146  0.0688
+mass_contrast                 -0.1317  0.0207  0.0000 -0.1723 -0.0910
+mean_cn                       -0.0717  0.0288  0.0128 -0.1282 -0.0152
+mean_delta_chi_bond           -0.1047  0.0627  0.0952 -0.2277  0.0183
+mean_reduced_mass              0.2417  0.0390  0.0000  0.1653  0.3182
+
+VIF (>5 worrying, >10 severe):
+n_atom_primitive                  1.55
+cv_bond                           1.35
+sigma_chi                        10.27
+soap_intra_species_dispersion     1.32
+degeneracy_fraction               1.23
+raman_channel_entropy             1.08
+mass_contrast                     1.17
+mean_cn                           1.43
+mean_delta_chi_bond               8.46
+mean_reduced_mass                 2.34

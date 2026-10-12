@@ -238,7 +238,6 @@ Britholite-(Ce),Ca2.15Ce2.85Si3O12.16F0.84,silicate,123.0,8,0.06504065040650407
 Britvinite,Mg9Si10.532B3.468Pb14.144C2O58F2,silicate,192.0,17,0.08854166666666667
 Brizziite,NaSbO3,oxide_hydroxide,10.0,6,0.6
 Brochantite,Cu4SO10,sulfate,90.0,16,0.17777777777777778
-Bromellite,BeO,oxide_hydroxide,4.0,5,1.25
 Brookite,TiO2,oxide_hydroxide,36.0,11,0.3055555555555556
 Brownmillerite,Ca2Al1Fe1O5,oxide_hydroxide,51.0,15,0.29411764705882354
 Brucite,Mg(HO)2,oxide_hydroxide,4.0,6,1.5
@@ -579,7 +578,6 @@ Florkeite,K2.929Na1Ca2Al8Si8O44,silicate,198.0,16,0.08080808080808081
 Fluellite,Al2P1H17.24O12F2,phosphate_arsenate_vanadate,129.0,14,0.10852713178294573
 Fluoborite,Mg3BH3(OF)3,borate,21.0,6,0.2857142857142857
 Fluocerite-(Ce),CeF3,halide,17.0,10,0.5882352941176471
-Fluorapatite,Ca5P3O12F,phosphate_arsenate_vanadate,33.0,9,0.2727272727272727
 Fluorapophyllite-(K),K0.84Na0.16Ca4Si8O28F1,silicate,75.0,16,0.21333333333333335
 Fluorbritholite-(Ce),Ca2.45La0.55Ce1.05Pr0.1Nd0.3Sm0.05Y0.1Th0.35U0.05Si2.79B0.09P0.12O12.12F0.88,silicate,61.0,7,0.11475409836065574
 Fluor-buergerite,NaAl6Fe3Si6B3H3O30F,silicate,82.0,10,0.12195121951219512
@@ -1107,7 +1105,6 @@ Mixite,Cu6Bi1As3O20.99997,phosphate_arsenate_vanadate,85.0,10,0.1176470588235294
 Miyawakiite-(Y),K0.301Ca0.332Tb0.012Yb0.12Sm0.02Gd0.08Dy0.212Y2.952Er0.1Mg0.48Mn0.24Fe1.14Si8C4O35,silicate,117.0,12,0.10256410256410256
 Molybdenite,MoS2,sulfide_selenide_telluride,4.0,4,1.0
 Molybdite,MoO3,oxide_hydroxide,24.0,11,0.4583333333333333
-Molybdomenite,PbSeO3,oxide_hydroxide,15.0,6,0.4
 Molybdophyllite,Mg9Si10Pb8(CO16)3,silicate,231.0,16,0.06926406926406926
 Monazite-(Ce),CePO4,phosphate_arsenate_vanadate,36.0,17,0.4722222222222222
 Monazite-(Gd),GdPO4,phosphate_arsenate_vanadate,36.0,14,0.3888888888888889
@@ -1692,7 +1689,6 @@ Ullmannite,Co0.03Ni0.97Bi0.01Sb0.91As0.1S0.98,sulfide_selenide_telluride,14.0,7,
 Ulrichite,Ca1U1Cu1P2O14,phosphate_arsenate_vanadate,60.0,8,0.13333333333333333
 Umangite,Cu3Se2,sulfide_selenide_telluride,18.0,5,0.2777777777777778
 Umohoite,UMoO8,oxide_hydroxide,60.0,15,0.25
-unknown,Ca3Ti2(SiO4)3,silicate,25.0,6,0.24
 Uralborite,CaB2(H2O3)2,borate,156.0,20,0.1282051282051282
 Uralolite,Ca2Be4P3O20,phosphate_arsenate_vanadate,174.0,13,0.07471264367816093
 Uramarsite,Na0.09U2As1.22P0.78H0.72O18Nh1.15,phosphate_arsenate_vanadate,69.0,8,0.11594202898550725

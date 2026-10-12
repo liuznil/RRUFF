@@ -7,13 +7,54 @@ as response variables:
 
     N_peak        -- number of resolved peaks
     S_peak        -- Shannon entropy of the peak-area distribution
-    Gamma         -- median FWHM of resolved peaks (linewidth)
+    Gamma         -- median width at half prominence of resolved peaks
     dOmega_median -- median spacing between adjacent peak positions
     R_overlap     -- Gamma / dOmega_median  (band-overlap / resolvability index)
-    w1_distance   -- Wasserstein distance to uniform distribution
+    shape_w1_distance -- 1-D Wasserstein (earth-mover's) distance between the
+                         background-corrected spectral-intensity distribution
+                         and a fixed reference distribution (see
+                         `w1_distance_to_uniform_reference` for the exact
+                         definition). Larger values indicate spectral weight
+                         concentrated away from a flat/uniform profile.
+    shape_centroid,
+    shape_skewness    -- intensity-weighted centre of mass and asymmetry of the
+                         SAME observed distribution used for shape_w1_distance.
+                         These are peak-detection-free, so they remain
+                         well-defined even for spectra with weak or ambiguous
+                         discrete peaks.
 
 Analysis window: peaks are only searched for in the 100-1300 cm^-1 "finger-
 print" region.
+
+Reference distribution for shape_w1_distance
+---------------------------------------
+`shape_w1_distance` is the 1-D Wasserstein distance between two distributions over
+wavenumber, both restricted to the analysis window [WINDOW_MIN, WINDOW_MAX]
+= [100, 1300] cm^-1:
+
+  (i)  the OBSERVED distribution: the wavenumber grid points `x` retained
+       after windowing, each weighted by the background-corrected intensity
+       `y_bc` at that point (rolling-minimum baseline subtracted, clipped at
+       zero; see `_read_spectrum` / baseline step above). This is the
+       spectrum's own intensity profile treated as an (unnormalised)
+       measure over wavenumber.
+  (ii) the REFERENCE distribution: `n` points spaced evenly across the full
+       nominal window [WINDOW_MIN, WINDOW_MAX], where `n = len(y_bc)` (i.e.
+       the same number of support points as the observed spectrum), each
+       given EQUAL weight (scipy's `wasserstein_distance` default when no
+       `v_weights` is supplied). In the limit of dense sampling this
+       converges to the continuous Uniform(WINDOW_MIN, WINDOW_MAX)
+       distribution, i.e. a perfectly flat spectral-weight profile spanning
+       the whole fingerprint region.
+
+Two points are worth stating explicitly for reproducibility:
+  * The reference always spans the FULL nominal window [100, 1300] cm^-1,
+    regardless of the wavenumber range actually populated by a given
+    spectrum's non-zero intensity -- it is not renormalised per spectrum.
+  * `shape_w1_distance` is therefore best read as a measure of how unevenly
+    spectral intensity is distributed across the fingerprint window
+    relative to a flat baseline, not as a distance to any other measured
+    or simulated spectrum.
 """
 from __future__ import annotations
 
@@ -58,13 +99,126 @@ class RamanFeatures:
     n_high: int = 0
     s_high: float = float("nan")
     gamma_high: float = float("nan")
-    w1_distance: float = float("nan")
+    shape_w1_distance: float = float("nan")  # see w1_distance_to_uniform_reference() below for definition
+    shape_centroid: float = float("nan")  # see spectral_moment_features() below for definition
+    shape_skewness: float = float("nan")
+    peak_positions_cm1: str = ""
     snr: float = float("nan")
     ok: bool = False
     error: str = ""
 
-def compute_band_features(positions, fwhm, areas, p_min, p_max):
-    mask = (positions >= p_min) & (positions < p_max)
+@dataclass(frozen=True)
+class RamanSettings:
+    baseline_window_fraction: float = 1 / 40
+    smoothing_window_fraction: float = 1 / 100
+    min_height_frac: float = MIN_HEIGHT_FRAC
+    min_prominence_frac: float = MIN_PROMINENCE_FRAC
+    min_peak_distance_cm: float = MIN_PEAK_DISTANCE_CM
+    n_sigma_noise: float = N_SIGMA_NOISE
+
+
+def w1_distance_to_uniform_reference(x: np.ndarray, y_bc: np.ndarray,
+                                      window_min: float = WINDOW_MIN,
+                                      window_max: float = WINDOW_MAX) -> float:
+    """1-D Wasserstein distance from the observed intensity profile to a
+    uniform reference spanning the analysis window.
+
+    Parameters
+    ----------
+    x : wavenumber grid points (cm^-1) retained after windowing to
+        [window_min, window_max]; must be strictly increasing.
+    y_bc : background-corrected intensity at each point in `x` (same
+        length as `x`); used as unnormalised weights, so absolute scale
+        does not matter (scipy normalises internally).
+    window_min, window_max : bounds of the analysis / reference window,
+        defaults to the module-level fingerprint window [100, 1300] cm^-1.
+
+    Reference distribution
+    -----------------------
+    The reference is `len(y_bc)` points spaced evenly across
+    [window_min, window_max], each with equal weight -- i.e. a discretised
+    Uniform(window_min, window_max) distribution using as many support
+    points as the observed spectrum. It always spans the full nominal
+    window regardless of where a given spectrum's intensity happens to be
+    concentrated, so `shape_w1_distance` measures departure from a flat
+    spectral-weight profile across the whole fingerprint region, not a
+    distance to another measured spectrum.
+
+    Returns
+    -------
+    float : the Wasserstein-1 distance, in wavenumber units (cm^-1).
+    """
+    reference_points = np.linspace(window_min, window_max, len(y_bc))
+    return float(wasserstein_distance(x, reference_points, u_weights=y_bc))
+
+
+def spectral_moment_features(x: np.ndarray, y_bc: np.ndarray) -> dict:
+    """Weighted central-moment shape descriptors of the spectrum, computed
+    on exactly the same (x, y_bc) observed distribution used by
+    `w1_distance_to_uniform_reference` -- i.e. the background-corrected
+    intensity at each retained wavenumber point, treated as an unnormalised
+    measure over wavenumber within the fingerprint window. Together with
+    `shape_w1_distance`, these give a peak-detection-free, model-free summary of
+    spectral shape: where the spectral weight is centred, how broadly it is
+    and whether it is asymmetric.
+
+    Parameters
+    ----------
+    x : wavenumber grid points (cm^-1) retained after windowing.
+    y_bc : background-corrected intensity at each point in `x` (same
+        length as `x`); used as unnormalised weights.
+
+    Returns
+    -------
+    dict with keys:
+        shape_centroid : intensity-weighted mean wavenumber (cm^-1) -- the
+            "centre of mass" of the spectrum within the fingerprint window.
+        shape_skewness : standardised third central moment (Fisher-Pearson
+            skewness). Positive values indicate a tail of spectral weight
+            extending toward higher wavenumber than the bulk of the
+            intensity, negative values toward lower wavenumber.
+
+    `shape_skewness` is set to NaN (rather than 0 or an arbitrary fallback)
+    when the weighted distribution is numerically degenerate, since the standardised
+    moment is undefined in that limit.
+    """
+    x = np.asarray(x, dtype=float)
+    w = np.asarray(y_bc, dtype=float)
+    total = float(w.sum())
+    nan = float("nan")
+    if total <= 0 or not np.isfinite(total):
+        return dict(shape_centroid=nan, shape_skewness=nan)
+
+    p = w / total
+    mu = float(np.sum(p * x))
+    var = float(np.sum(p * (x - mu) ** 2))
+    std = var ** 0.5
+    if not np.isfinite(std) or std <= 1e-8:
+        return dict(shape_centroid=mu, shape_skewness=nan)
+
+    m3 = float(np.sum(p * (x - mu) ** 3))
+    skewness = m3 / std ** 3
+    return dict(shape_centroid=mu, shape_skewness=skewness)
+
+
+def compute_band_features(positions: np.ndarray, fwhm: np.ndarray, areas: np.ndarray,
+                           p_min: float, p_max: float) -> dict:
+    """Per-band summary of detected peaks in [p_min, p_max), except the final band includes its upper bound.
+
+    Parameters
+    ----------
+    positions, fwhm, areas : per-peak arrays (same length, same order) as computed
+        in `compute_raman_features` -- peak wavenumber, half-prominence width, and area.
+    p_min, p_max : band bounds in cm^-1 (see the module-level `BANDS` dict).
+
+    Returns
+    -------
+    dict with keys "n" (peak count in the band), "s" (Shannon entropy of the
+    band's peak-area distribution), "gamma" (median half-prominence width).
+    Returns {"n": 0, "s": 0.0, "gamma": 0.0} when no peaks fall in the band.
+    """
+    mask = ((positions >= p_min) &
+            ((positions <= p_max) if p_max == WINDOW_MAX else (positions < p_max)))
     if mask.sum() == 0:
         return {"n": 0, "s": 0.0, "gamma": 0.0}
     b_pos, b_fwhm, b_areas = positions[mask], fwhm[mask], areas[mask]
@@ -74,6 +228,7 @@ def compute_band_features(positions, fwhm, areas, p_min, p_max):
         "s": float(-np.sum(p * np.log(p))),
         "gamma": float(np.median(b_fwhm))
     }
+
 
 def _parse_meta_from_filename(path: Path):
     parts = path.stem.split("__")
@@ -102,7 +257,9 @@ def _read_spectrum(path: Path):
             ys.append(y)
     return np.array(xs), np.array(ys)
 
-def compute_raman_features(path: Path, quality: str, orientation: str) -> RamanFeatures:
+def compute_raman_features(path: Path, quality: str, orientation: str,
+                           settings: RamanSettings | None = None) -> RamanFeatures:
+    settings = settings or RamanSettings()
     mineral, rruff_id, wavelength = _parse_meta_from_filename(path)
     feat = RamanFeatures(
         mineral=mineral, rruff_id=rruff_id, file_path=str(path),
@@ -128,7 +285,7 @@ def compute_raman_features(path: Path, quality: str, orientation: str) -> RamanF
             feat.error = "invalid_wavenumber_spacing"
             return feat
 
-        win = max(11, len(y) // 40 | 1)
+        win = max(11, int(len(y) * settings.baseline_window_fraction) | 1)
         rolling_min = np.array([
             y[max(0, i - win): i + win + 1].min() for i in range(len(y))
         ])
@@ -143,7 +300,7 @@ def compute_raman_features(path: Path, quality: str, orientation: str) -> RamanF
             feat.error = "flat_spectrum"
             return feat
 
-        sg_window = max(5, (len(y_bc) // 100) | 1)
+        sg_window = max(5, int(len(y_bc) * settings.smoothing_window_fraction) | 1)
         sg_window = min(sg_window, len(y_bc) - 1 if len(y_bc) % 2 == 0 else len(y_bc))
         if sg_window < 5:
             sg_window = 5
@@ -158,9 +315,9 @@ def compute_raman_features(path: Path, quality: str, orientation: str) -> RamanF
         sigma_noise = 1.4826 * float(np.median(np.abs(noise - np.median(noise))))
         feat.snr = float(max_signal / sigma_noise) if sigma_noise > 0 else float("inf")
 
-        min_distance_pts = max(1, int(round(MIN_PEAK_DISTANCE_CM / dx)))
-        prominence_floor = max(MIN_PROMINENCE_FRAC * max_signal, N_SIGMA_NOISE * sigma_noise)
-        height_floor = max(MIN_HEIGHT_FRAC * max_signal, N_SIGMA_NOISE * sigma_noise)
+        min_distance_pts = max(1, int(round(settings.min_peak_distance_cm / dx)))
+        prominence_floor = max(settings.min_prominence_frac * max_signal, settings.n_sigma_noise * sigma_noise)
+        height_floor = max(settings.min_height_frac * max_signal, settings.n_sigma_noise * sigma_noise)
         peaks, _ = find_peaks(
             y_smooth,
             height=height_floor,
@@ -203,6 +360,7 @@ def compute_raman_features(path: Path, quality: str, orientation: str) -> RamanF
         areas = areas[order2]
 
         feat.n_peak = len(positions)
+        feat.peak_positions_cm1 = ";".join(f"{position:.2f}" for position in positions)
         p = areas / areas.sum()
         feat.s_peak = float(-np.sum(p * np.log(p)))
         feat.gamma = float(np.median(fwhm))
@@ -217,8 +375,9 @@ def compute_raman_features(path: Path, quality: str, orientation: str) -> RamanF
             setattr(feat, f"s_{band_name}", b_feats["s"])
             setattr(feat, f"gamma_{band_name}", b_feats["gamma"])
 
-        ideal_uniform = np.linspace(WINDOW_MIN, WINDOW_MAX, len(y_bc))
-        feat.w1_distance = float(wasserstein_distance(x, ideal_uniform, u_weights=y_bc))
+        feat.shape_w1_distance = w1_distance_to_uniform_reference(x, y_bc)
+        for _k, _v in spectral_moment_features(x, y_bc).items():
+            setattr(feat, _k, _v)
 
         feat.ok = True
     except Exception as e:

@@ -17,20 +17,22 @@ Design
    renamed (``structure_ok``, ``structure_error``, ``raman_ok``, ``raman_error`` ...) and a check
    raises if any collision remains.
 5. Every dropped mineral is logged with stage and reason (``dataset_failures.csv``).
-6. Structure extraction (the slow part: symmetry + SOAP) can run in parallel: ``-j N``.
+6. RRUFF identifiers occurring under multiple normalised names are rejected rather than
+   silently paired with one of several possible structures.
+7. Structure extraction (the slow part: symmetry + SOAP) can run in parallel: ``-j N``.
 
 Usage
 -----
-    python build_dataset.py                 # project root = parent of this file's folder
-    python build_dataset.py --root /path/to/project -j 8
+    python scripts/build_dataset.py   
 """
 from __future__ import annotations
 
 import argparse
 import re
 import sys
+import time
 from collections import Counter, defaultdict
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from dataclasses import asdict, fields, is_dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -82,6 +84,12 @@ RAMAN_RENAME = {
 
 STRUCT_STAGE_CATEGORIES = ("parse_failed", "symmetry_failed", "group_theory_failed")
 
+# A handful of CIFs (heavily disordered occupancies, many near-coincident sites) make
+# pymatgen's primitive-cell / symmetry routines pathologically slow or hang outright.
+# Any single mineral task (structure + Raman) that runs longer than this is killed and
+# logged as a "timeout" failure instead of blocking the whole build.
+DEFAULT_TIMEOUT_S = 300
+
 
 # -----------------------------------------------------------------------------
 # Name normalisation and indexing
@@ -116,6 +124,28 @@ def index_raman(raman_root: Path) -> dict[str, dict[tuple[str, str], list[Path]]
     if n_dirs == 0:
         raise FileNotFoundError(f"no <quality>_<orientation> folders found under {raman_root}")
     return by_name
+
+
+def _rruff_id(path: Path) -> str:
+    """Return the filename-level RRUFF identifier used for duplicate-match audits."""
+    parts = path.stem.split("__")
+    return parts[1].strip().upper() if len(parts) > 1 else ""
+
+
+def ambiguous_raman_names(index: dict[str, dict[tuple[str, str], list[Path]]]) -> dict[str, set[str]]:
+    """Find RRUFF IDs assigned to more than one normalised mineral name.
+
+    A duplicated identifier is not safe to resolve by name alone: accepting either
+    structure would silently create a false composition/polymorph match.
+    """
+    owners: dict[str, set[str]] = defaultdict(set)
+    for name, tiers in index.items():
+        for paths in tiers.values():
+            for path in paths:
+                rid = _rruff_id(path)
+                if rid:
+                    owners[rid].add(name)
+    return {rid: names for rid, names in owners.items() if len(names) > 1}
 
 
 # -----------------------------------------------------------------------------
@@ -213,6 +243,7 @@ PREFERRED_COLUMNS = [
     # parsing / disorder / status
     "structure_ok", "structure_error", "cif_repaired", "n_unknown_labels",
     "is_ordered", "n_disordered_sites", "mixing_entropy",
+    "chemistry_status", "bond_status", "soap_status",
     # symmetry
     "space_group_symbol", "space_group_number", "crystal_system", "point_group",
     "is_centrosymmetric", "symmetry_consistent", "n_sites_conventional", "n_atom_primitive",
@@ -228,12 +259,15 @@ PREFERRED_COLUMNS = [
     "mean_delta_chi_bond", "mean_reduced_mass", "n_anion_group_types", "anion_group_o_fraction",
     "polymerization_index",
     "soap_intra_species_dispersion", "soap_n_env", "soap_min_env_sep",
+    "soap_pairwise_env_sep_mean", "soap_pairwise_env_sep_median",
+    "soap_pairwise_env_sep_q90", "soap_pairwise_env_sep_q95",
+    "soap_pairwise_env_sep_max", "soap_env_count_entropy",
     # Raman metadata / descriptors
     "raman_ok", "raman_error", "raman_quality", "raman_orientation", "raman_wavelength",
     "raman_n_points", "raman_snr",
     "n_peak", "s_peak", "gamma", "domega_median", "r_overlap",
     "n_low", "s_low", "gamma_low", "n_mid", "s_mid", "gamma_mid", "n_high", "s_high", "gamma_high",
-    "w1_distance",
+    "shape_w1_distance", "shape_centroid", "shape_skewness",
 ]
 
 
@@ -253,7 +287,7 @@ def expected_columns() -> set[str]:
 # -----------------------------------------------------------------------------
 # Main build
 # -----------------------------------------------------------------------------
-def build(root: Path = DEFAULT_ROOT, n_jobs: int = 1) -> pd.DataFrame:
+def build(root: Path = DEFAULT_ROOT, n_jobs: int = 1, timeout_s: int = DEFAULT_TIMEOUT_S) -> pd.DataFrame:
     cif_dir = root / "data" / "AMCSD" / "cif"
     raman_root = root / "data" / "raman"
     out_dir = root / "results"
@@ -262,18 +296,24 @@ def build(root: Path = DEFAULT_ROOT, n_jobs: int = 1) -> pd.DataFrame:
 
     cif_index, raman_index = index_cifs(cif_dir), index_raman(raman_root)
     common = sorted(set(cif_index) & set(raman_index))
+    collisions = ambiguous_raman_names(raman_index)
+    rejected_names = {
+        name for names in collisions.values() for name in names if name in common
+    }
+    if rejected_names:
+        common = [name for name in common if name not in rejected_names]
+        print(f"Rejected ambiguous RRUFF-ID matches: {len(rejected_names)}")
     print(f"AMCSD mineral names       : {len(cif_index)}")
     print(f"RRUFF Raman mineral names : {len(raman_index)}")
     print(f"Matched mineral names     : {len(common)}")
 
     tasks = [(k, cif_index[k], {t: list(v) for t, v in raman_index[k].items()}) for k in common]
-    if n_jobs > 1:
-        with ProcessPoolExecutor(max_workers=n_jobs) as ex:
-            results = ex.map(_process_one, tasks, chunksize=4)      # order-preserving
-            done = _collect(results, len(tasks))
-    else:
-        done = _collect(map(_process_one, tasks), len(tasks))
-    rows, failures = done
+    rows, failures = _run_with_timeout(tasks, n_jobs, timeout_s)
+    failures.extend(
+        (name, "matching", "ambiguous_rruff_id",
+         "RRUFF identifier occurs under multiple mineral names; match rejected")
+        for name in sorted(rejected_names)
+    )
 
     df = pd.DataFrame(rows)
     if not df.empty:
@@ -286,15 +326,66 @@ def build(root: Path = DEFAULT_ROOT, n_jobs: int = 1) -> pd.DataFrame:
     return df
 
 
-def _collect(results, total: int):
+def _run_with_timeout(tasks, n_jobs: int, timeout_s: int):
+    """Run ``_process_one`` over ``tasks`` using a process pool, always going through
+    subprocesses (even for ``n_jobs == 1``) so that a single pathologically slow
+    candidate (typically pymatgen's symmetry / primitive-cell code on a disordered
+    structure) can be killed on a timeout rather than hanging the whole build.
+
+    Any in-flight task that exceeds ``timeout_s`` is logged as a
+    ``(stage="structure", category="timeout")`` failure, its worker process is
+    discarded (the pool is recycled, since a single hung worker can't otherwise be
+    reclaimed), and the build continues with the remaining tasks.
+    """
+    n_workers = max(1, n_jobs)
+    total = len(tasks)
     rows, failures = [], []
-    for i, (key, row, fail) in enumerate(results, start=1):
-        if row is not None:
-            rows.append(row)
-        else:
-            failures.append((key, *fail))
-        if i % 500 == 0 or i == total:
-            print(f"  ... {i}/{total} processed, {len(rows)} kept, {len(failures)} dropped", flush=True)
+    n_done = 0
+
+    pending = list(tasks)
+    ex = ProcessPoolExecutor(max_workers=n_workers)
+    inflight: dict = {}  # future -> (key, submit_time)
+
+    def _submit_more():
+        while pending and len(inflight) < n_workers:
+            t = pending.pop(0)
+            inflight[ex.submit(_process_one, t)] = (t[0], time.monotonic())
+
+    try:
+        _submit_more()
+        while inflight:
+            done_set, _ = wait(inflight, timeout=5, return_when=FIRST_COMPLETED)
+            for fut in done_set:
+                key, _ = inflight.pop(fut)
+                try:
+                    _, row, fail = fut.result()
+                except Exception as e:                     # worker crashed / was killed
+                    row, fail = None, ("structure", "worker_exception", str(e)[:200])
+                if row is not None:
+                    rows.append(row)
+                else:
+                    failures.append((key, *fail))
+                n_done += 1
+
+            now = time.monotonic()
+            stuck = [f for f, (_, t0) in inflight.items() if now - t0 > timeout_s]
+            if stuck:
+                for f in stuck:
+                    key, _ = inflight.pop(f)
+                    failures.append((key, "structure", "timeout", f"exceeded {timeout_s}s"))
+                    n_done += 1
+                # the hung worker process(es) can't be reclaimed individually with
+                # ProcessPoolExecutor, so recycle the whole pool to drop them
+                ex.shutdown(wait=False, cancel_futures=True)
+                ex = ProcessPoolExecutor(max_workers=n_workers)
+                inflight = {}
+
+            _submit_more()
+            if n_done and (n_done % 500 == 0 or n_done == total):
+                print(f"  ... {n_done}/{total} processed, {len(rows)} kept, {len(failures)} dropped", flush=True)
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
+
     return rows, failures
 
 
@@ -329,8 +420,10 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Build the merged structure-Raman dataset")
     ap.add_argument("--root", type=Path, default=DEFAULT_ROOT, help="project root (contains data/)")
     ap.add_argument("-j", "--jobs", type=int, default=1, help="parallel worker processes")
+    ap.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_S,
+                     help="per-mineral timeout in seconds before it's killed and logged as a failure")
     a = ap.parse_args(argv)
-    build(a.root, a.jobs)
+    build(a.root, a.jobs, a.timeout)
     return 0
 
 

@@ -1,0 +1,16 @@
+M1 core: z(Spectral centroid) ~ n_atom_primitive + cv_bond + sigma_chi + soap_intra_species_dispersion
+n=1800, R2=0.185, adj R2=0.183, SE=cluster (G=1736 clusters)
+predictors z-scored, response z-scored: coefficients are standardised betas
+
+                                 beta      se       p   ci_lo   ci_hi
+const                         -0.0000  0.0218  1.0000 -0.0427  0.0427
+n_atom_primitive               0.2437  0.0261  0.0000  0.1925  0.2948
+cv_bond                       -0.0199  0.0240  0.4068 -0.0671  0.0272
+sigma_chi                      0.3199  0.0274  0.0000  0.2661  0.3736
+soap_intra_species_dispersion -0.1082  0.0273  0.0001 -0.1617 -0.0547
+
+VIF (>5 worrying, >10 severe):
+n_atom_primitive                 1.30
+cv_bond                          1.04
+sigma_chi                        1.06
+soap_intra_species_dispersion    1.24

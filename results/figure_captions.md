@@ -7,19 +7,19 @@ Study design. Raman spectra from the RRUFF Raman directory are linked to crystal
 Group-theoretical mode availability versus observed peaks. (a) N_Raman against N_peak with the 1:1 line (all active modes resolved). (b, c) Partial Spearman association of symmetry descriptors with the peak-count residual given ln N_Raman, i.e. resolved peaks beyond what mode availability implies; the ratio eta = N_peak/N_Raman is deliberately not used because it is coupled to N_Raman by construction.
 
 ## Figure 3
-Bond-geometry descriptors against spectral endpoints. Line: decile-binned median. Annotations: partial Spearman rho (adjusted for ln N_atom and ln SNR), 95% CI and BH-FDR q.
+Strongest bond-geometry associations with peak count, band fractions, and spectral distance. Points show observations; lines show decile-binned medians. Annotations report partial Spearman rho, 95% CI, and BH-FDR q.
 
 ## Figure 4
-Composition-derived chemistry descriptors against spectral endpoints (same conventions as Figure 3).
+Strongest composition-derived associations with linewidth, spectral shape, and peak count. Weak or null exploratory pairs are retained in the full correlation table rather than the main figure.
 
 ## Figure 5
-Out-of-fold R2 (grouped 5-fold CV by chemical formula) for each predictor set and spectral endpoint. Negative values (blue) are worse than predicting the mean. Measurement = SNR + excitation wavelength; Family + system = chemical family and crystal system.
+Out-of-fold R2 (grouped 5-fold CV by chemical formula) across the informative spectral endpoints. Measurement = SNR + excitation wavelength; categorical = chemical family + crystal system; eta is excluded because it is definitionally coupled to peak count and Raman-active mode count.
 
 ## Figure 6
 Joint held-out permutation importance (change in R2 when an entire descriptor group is permuted jointly). Values quantify predictive information, not causal effect.
 
 ## Figure 7
-Proposed conceptual framework (hypothesis). Boxes are the analysed layers; arrows indicate the hypothesised direction and are tested only through the associations reported in Figures 2-6.
+Integrated findings: (a) incremental out-of-fold value beyond family + crystal system; (b) descriptor group most often ranked first by joint permutation; (c) measurement-only versus structure/chemistry predictive performance.
 
 ## Figure S1
 Quality-control funnel and median standardised spectral profile per chemical family.

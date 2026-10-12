@@ -1,0 +1,28 @@
+M2 extended: z(Spectral centroid) ~ n_atom_primitive + cv_bond + sigma_chi + soap_intra_species_dispersion + degeneracy_fraction + raman_channel_entropy + mass_contrast + mean_cn + mean_delta_chi_bond + mean_reduced_mass
+n=1797, R2=0.254, adj R2=0.250, SE=cluster (G=1733 clusters)
+predictors z-scored, response z-scored: coefficients are standardised betas
+
+                                 beta      se       p   ci_lo   ci_hi
+const                          0.0000  0.0209  1.0000 -0.0411  0.0411
+n_atom_primitive               0.1569  0.0279  0.0000  0.1022  0.2116
+cv_bond                       -0.0326  0.0267  0.2218 -0.0849  0.0197
+sigma_chi                     -0.0961  0.0714  0.1787 -0.2361  0.0440
+soap_intra_species_dispersion -0.1114  0.0275  0.0001 -0.1653 -0.0574
+degeneracy_fraction           -0.0866  0.0236  0.0003 -0.1329 -0.0402
+raman_channel_entropy         -0.0442  0.0209  0.0347 -0.0853 -0.0032
+mass_contrast                  0.0533  0.0219  0.0152  0.0103  0.0963
+mean_cn                        0.1328  0.0270  0.0000  0.0798  0.1858
+mean_delta_chi_bond            0.2098  0.0642  0.0011  0.0838  0.3358
+mean_reduced_mass             -0.2781  0.0373  0.0000 -0.3512 -0.2050
+
+VIF (>5 worrying, >10 severe):
+n_atom_primitive                  1.55
+cv_bond                           1.35
+sigma_chi                        10.27
+soap_intra_species_dispersion     1.32
+degeneracy_fraction               1.23
+raman_channel_entropy             1.08
+mass_contrast                     1.17
+mean_cn                           1.43
+mean_delta_chi_bond               8.46
+mean_reduced_mass                 2.34

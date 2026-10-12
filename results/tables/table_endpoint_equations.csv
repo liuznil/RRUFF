@@ -1,0 +1,12 @@
+endpoint,definition
+n_peak,N_peak = number of detected local maxima in 100 <= nu <= 1300 cm^-1
+evenness,"E = -sum_i p_i ln(p_i) / ln(N_peak), p_i = peak area_i / sum_j peak area_j"
+gamma,"Gamma = median_i(w_i), where w_i is the width at 50% prominence from peak_widths"
+domega_median,Delta_omega = median_i(nu_(i+1) - nu_i) for ordered detected peaks
+r_overlap,R_overlap = Gamma / Delta_omega_median
+frac_low,"f_low = N_peak([100,400) cm^-1) / N_peak"
+frac_mid,"f_mid = N_peak([400,700) cm^-1) / N_peak"
+frac_high,"f_high = N_peak([700,1300] cm^-1) / N_peak; the terminal upper bound is inclusive"
+shape_w1_distance,"W1 = integral_[100,1300] |F_obs(nu)-F_unif(nu)| dnu; F_obs is the normalized baseline-corrected intensity distribution"
+shape_centroid,"mu = sum_i w_i nu_i / sum_i w_i, w_i = max(I_i - rolling_min_i, 0)"
+shape_skewness,"g1 = sum_i p_i(nu_i-mu)^3 / [sum_i p_i(nu_i-mu)^2]^(3/2), p_i = w_i/sum_j w_j"

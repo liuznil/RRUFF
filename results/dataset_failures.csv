@@ -63,3 +63,7 @@ wangdaodeite,structure,symmetry_failed,Wangdaodeite__0020928.cif: symmetry_faile
 whiteitecafemg,structure,parse_failed,Whiteite-(CaFeMg)__0019137.cif: parse_failed: parse: Invalid CIF file with no structures! | fallback: Invalid CIF file with no structures! | repair: Invalid CIF file with no structures!
 zheshengite,structure,parse_failed,Zheshengite__0021786.cif: parse_failed: parse: len(items)=141 is not a multiple of n=20 | fallback: len(items)=141 is not a multiple of n=20 | repair: Invalid CIF file with no structures!
 zinc,raman,no_peaks,Zinc__R070497__Raman__532______Raman_Data_Processed__e4dbb2e6efcf774107e90fdb2aca.txt: no_peaks
+bromellite,matching,ambiguous_rruff_id,RRUFF identifier occurs under multiple mineral names; match rejected
+fluorapatite,matching,ambiguous_rruff_id,RRUFF identifier occurs under multiple mineral names; match rejected
+molybdomenite,matching,ambiguous_rruff_id,RRUFF identifier occurs under multiple mineral names; match rejected
+unknown,matching,ambiguous_rruff_id,RRUFF identifier occurs under multiple mineral names; match rejected

@@ -33,5 +33,7 @@ target,r_overlap,none
 target,frac_low,none
 target,frac_mid,none
 target,frac_high,none
-target,w1_distance,log
+target,shape_w1_distance,log
+target,shape_centroid,none
+target,shape_skewness,none
 target,eta,none

@@ -27,8 +27,8 @@ Structural and composition-derived descriptors  ->  Raman-spectrum features : pu
 
 
 用法
-  python data_analysis.py --csv results/dataset.csv --out results
-  python data_analysis.py --fast          # 调试: 1 次重复 CV, 少量 bootstrap, 跳过消融/LOFO
+  python scripts/data_analysis.py --csv results/dataset.csv --out results
+  python scripts/data_analysis.py --fast          # 调试: 1 次重复 CV, 少量 bootstrap, 跳过消融/LOFO
 """
 from __future__ import annotations
 
@@ -110,13 +110,18 @@ Targ = namedtuple("Targ", "name label tf")            # tf 额外允许 'auto' (
 TARGETS = [
     Targ("n_peak", "N_peak", "log"),
     Targ("evenness", "Peak-intensity evenness", None),
-    Targ("gamma", "Mean linewidth gamma", "log"),
+    Targ("gamma", "Median linewidth gamma", "log"),
     Targ("domega_median", "Median peak spacing", "log"),
     Targ("r_overlap", "Peak overlap ratio", "auto"),
     Targ("frac_low", "Low-band fraction", None),
     Targ("frac_mid", "Mid-band fraction", None),
     Targ("frac_high", "High-band fraction", None),
-    Targ("w1_distance", "W1 distance", "log"),
+    Targ("shape_w1_distance", "W1 distance", "log"),
+    # Peak-detection-free spectral-shape moments (see raman_features.spectral_moment_features);
+    # computed on the same background-corrected intensity-vs-wavenumber distribution as shape_w1_distance,
+    # so they are directly comparable to it and to each other.
+    Targ("shape_centroid", "Spectral centroid", None),
+    Targ("shape_skewness", "Spectral skewness", None),
     Targ("eta", "Mapping efficiency eta", None),
 ]
 TARG = {t.name: t for t in TARGETS}
@@ -132,10 +137,10 @@ EXT_OLS = CORE_OLS + ["degeneracy_fraction", "raman_channel_entropy", "mass_cont
 GT_RESPONSES = ["n_peak", "evenness"]                   # 群论子样本回归: N_Raman 代替 N_atom (近共线)
 
 # 群论列: symmetry_consistent==False 时整体置 NaN (所描述的群不是所报告的群)
-GROUP_THEORY_COLUMNS = ["n_vib_distinct", "n_raman_active_modes", "n_ir_active_modes", "n_raman_ir_overlap",
+GROUP_THEORY_COLUMNS = ["is_centrosymmetric", "n_vib_distinct", "n_raman_active_modes", "n_ir_active_modes", "n_raman_ir_overlap",
                         "n_silent_modes", "n_raman_dof", "n_ir_dof", "raman_mode_fraction", "degeneracy_fraction",
                         "n_raman_irreps", "max_raman_irrep_mult", "raman_channel_entropy"]
-REQUIRED = ["n_atom_primitive", "family", "n_peak", "s_peak", "gamma", "r_overlap", "w1_distance"] + CORE_OLS[1:]
+REQUIRED = ["n_atom_primitive", "family", "n_peak", "s_peak", "gamma", "r_overlap", "shape_w1_distance"] + CORE_OLS[1:]
 
 FAM_ABBR = {"phosphate_arsenate_vanadate": "phosphate/arsenate/vanadate", "sulfide_selenide_telluride": "sulfide/selenide/telluride",
             "oxide_hydroxide": "oxide/hydroxide", "native_element": "native element"}
@@ -186,9 +191,11 @@ def read_raw(path: Path) -> pd.DataFrame:
     df["symmetry_consistent"] = _as_bool(df["symmetry_consistent"]) if "symmetry_consistent" in df else True
     gt = [c for c in GROUP_THEORY_COLUMNS if c in df.columns]
     df[gt] = df[gt].astype(float)
-    df.loc[~df["symmetry_consistent"], gt] = np.nan
     if "is_centrosymmetric" in df.columns:
         df["is_centrosymmetric"] = _as_bool(df["is_centrosymmetric"]).astype(float)
+    if "group_theory_status" in df:
+        df.loc[~df["group_theory_status"].eq("ok"), gt] = np.nan
+    df.loc[~df["symmetry_consistent"], gt] = np.nan
     return df
 
 
@@ -498,7 +505,7 @@ class Saver:
 
 # 模块级开关 (main() 里由命令行覆盖)
 FIG_TITLES = False          # 期刊图内通常不放总标题, 由图注承担; --fig-titles 可打开
-DPI = 300                   # PNG 分辨率
+DPI = 600                   # PNG 分辨率
 QA_LOG: list = []           # 每张图的排版检查结果
 
 
@@ -592,7 +599,7 @@ def iqr_str(s: pd.Series) -> str:
 
 
 def step0_cohort(R, D, funnel, tg, save, tab):
-    cols = [c for c in ["n_atom_primitive", "n_peak", "gamma", "domega_median", "r_overlap", "w1_distance", "eta"] if c in R]
+    cols = [c for c in ["n_atom_primitive", "n_peak", "gamma", "domega_median", "r_overlap", "shape_w1_distance", "eta"] if c in R]
     rows = [dict(group="All", n=len(R), **{c: iqr_str(R[c]) for c in cols})]
     for f, g in R.groupby("family"):
         rows.append(dict(group=fam_name(f), n=len(g), **{c: iqr_str(g[c]) for c in cols}))
@@ -657,13 +664,14 @@ def step2_categorical(D, tg, save, tab):
     res = pd.concat([kruskal_eta2(D, f, tg) for f, _ in facs], ignore_index=True)
     res["q"] = bh_fdr(res["p"].values)
     res.to_csv(tab / "table_categorical_effects_kruskal.csv", index=False)
-    M = np.array([[res[(res.factor == f) & (res.target == t)]["eta2_H"].values[0] for t in tg] for f, _ in facs])
-    Q = np.array([[res[(res.factor == f) & (res.target == t)]["q"].values[0] for t in tg] for f, _ in facs])
-    pref = [t for t in ["n_peak", "gamma", "frac_high", "w1_distance"] if t in tg]
+    display_tg = [t for t in tg if t != "eta"]
+    M = np.array([[res[(res.factor == f) & (res.target == t)]["eta2_H"].values[0] for t in display_tg] for f, _ in facs])
+    Q = np.array([[res[(res.factor == f) & (res.target == t)]["q"].values[0] for t in display_tg] for f, _ in facs])
+    pref = [t for t in ["n_peak", "gamma", "frac_high", "shape_w1_distance"] if t in tg]
     fig = plt.figure(figsize=(11.5, 9.5))
     gs = fig.add_gridspec(3, 2, height_ratios=[0.8, 1.1, 1.1], hspace=0.75, wspace=0.18)
     ax = fig.add_subplot(gs[0, :])
-    im = draw_heat(ax, M, Q, [tlabel(t) for t in tg], [n for _, n in facs], vmin=0, vmax=max(0.3, np.nanmax(M)),
+    im = draw_heat(ax, M, Q, [tlabel(t) for t in display_tg], [n for _, n in facs], vmin=0, vmax=max(0.3, np.nanmax(M)),
                    cmap="Purples", title="Variance in spectral features explained by categorical factors ($\\eta^2_H$)", fs=7)
     fig.colorbar(im, ax=ax, fraction=0.02, pad=0.01).set_label("$\\eta^2_H$")
     panel(ax, "a", dx=-0.01)
@@ -1073,21 +1081,31 @@ def step7_importance(D, feats, tg, gcol, args, save, tab, Dt):
 # =============================================================================
 # 8. S8 Lasso (嵌套 CV + 稳定性选择) / S9 PLS
 # =============================================================================
-def lasso_1se(Xs, y, groups, k, seed, n_alpha=60):
-    yc = y - y.mean()
-    amax = np.max(np.abs(Xs.T @ yc)) / len(y)
-    if not np.isfinite(amax) or amax <= 0:
-        return 1.0
-    alphas = np.geomspace(amax, amax * 1e-3, n_alpha)
+def lasso_1se(X: pd.DataFrame, y, groups, k, seed, n_alpha=60):
+    """Select a Lasso penalty with fold-local preprocessing.
+
+    The alpha grid is expressed relative to each inner-training fold's
+    standardised ``alpha_max``.  This avoids allowing imputation, missingness
+    selection, or scaling information from an inner validation fold to affect
+    penalty selection.
+    """
     folds = group_folds(groups, k, seed)
+    relative_alphas = np.geomspace(1.0, 1e-3, n_alpha)
     mse = np.zeros((len(folds), n_alpha))
     for i, (tr, va) in enumerate(folds):
-        xm, ym = Xs[tr].mean(0), y[tr].mean()
-        coefs = lasso_path(Xs[tr] - xm, y[tr] - ym, alphas=alphas, max_iter=20000)[1]
-        mse[i] = ((y[va][:, None] - ((Xs[va] - xm) @ coefs + ym)) ** 2).mean(0)
+        prep = Prep().fit(X.iloc[tr])
+        Xtr, Xva = prep.transform(X.iloc[tr]), prep.transform(X.iloc[va])
+        yc = y[tr] - y[tr].mean()
+        amax = np.max(np.abs(Xtr.T @ yc)) / len(tr)
+        if not np.isfinite(amax) or amax <= 0:
+            mse[i] = np.mean((y[va][:, None] - y[tr].mean()) ** 2, axis=0)
+            continue
+        alphas = amax * relative_alphas
+        coefs = lasso_path(Xtr, yc, alphas=alphas, max_iter=20000)[1]
+        mse[i] = ((y[va][:, None] - (Xva @ coefs + y[tr].mean())) ** 2).mean(0)
     mu, se = mse.mean(0), mse.std(0, ddof=1) / np.sqrt(len(folds))
     i0 = int(mu.argmin())
-    return float(alphas[np.where(mu <= mu[i0] + se[i0])[0].min()])          # 最大的 alpha (最稀疏) 落在 1-SE 内
+    return float(relative_alphas[np.where(mu <= mu[i0] + se[i0])[0].min()])
 
 
 def lasso_nested_oof(X: pd.DataFrame, y, groups, k, seed):
@@ -1096,8 +1114,11 @@ def lasso_nested_oof(X: pd.DataFrame, y, groups, k, seed):
         pr = Prep().fit(X.iloc[tr])
         Xtr, Xte = pr.transform(X.iloc[tr]), pr.transform(X.iloc[te])
         mu, sd = y[tr].mean(), y[tr].std() or 1.0
-        a = lasso_1se(Xtr, (y[tr] - mu) / sd, groups[tr], k, seed + 1)
-        pred[te] = Lasso(alpha=a, max_iter=20000).fit(Xtr, (y[tr] - mu) / sd).predict(Xte) * sd + mu
+        ys = (y[tr] - mu) / sd
+        relative_alpha = lasso_1se(X.iloc[tr].reset_index(drop=True), ys, groups[tr], k, seed + 1)
+        amax = np.max(np.abs(Xtr.T @ (ys - ys.mean()))) / len(tr)
+        alpha = relative_alpha * amax if np.isfinite(amax) and amax > 0 else 1.0
+        pred[te] = Lasso(alpha=alpha, max_iter=20000).fit(Xtr, ys).predict(Xte) * sd + mu
     return pred
 
 
@@ -1115,7 +1136,9 @@ def step8_lasso(D, feats, tg, gcol, args, save, tab):
         Xs = pr.transform(X)
         mu, sd = yy.mean(), yy.std()
         ys = (yy - mu) / sd
-        alpha = lasso_1se(Xs, ys, grp, args.cv_folds, args.seed)
+        relative_alpha = lasso_1se(X, ys, grp, args.cv_folds, args.seed)
+        amax = np.max(np.abs(Xs.T @ (ys - ys.mean()))) / len(ys)
+        alpha = relative_alpha * amax if np.isfinite(amax) and amax > 0 else 1.0
         coef = Lasso(alpha=alpha, max_iter=20000).fit(Xs, ys).coef_
         # 嵌套 CV R2 (alpha 在每个外折训练集内选择)
         pred = lasso_nested_oof(X, yy, grp, args.cv_folds, args.seed + 3)
@@ -1267,6 +1290,39 @@ def step10_sensitivity(raw_df, args, feats, tg, covars, tab):
     return S
 
 
+def step10_missingness_sensitivity(D, feats, tg, gcol, args, tab):
+    """Compare grouped-CV performance with native missingness to complete cases.
+
+    This is a descriptive sensitivity analysis: the complete-case estimate is
+    evaluated on a different population and is therefore not interpreted as a
+    causal effect of missingness.
+    """
+    complete = D[feats].notna().all(axis=1)
+    rows = []
+    for y in tg:
+        def cv_r2(frame):
+            frame = frame.dropna(subset=[y]).reset_index(drop=True)
+            if len(frame) < 50:
+                return np.nan, len(frame)
+            yy = frame[y].to_numpy(float)
+            grp = frame[gcol].to_numpy() if gcol else np.arange(len(frame))
+            X = frame[feats].to_numpy(float)
+            pred = np.full(len(frame), np.nan)
+            for tr, te in group_folds(grp, args.cv_folds, args.seed):
+                pred[te] = make_hgb(args.seed, args.fast).fit(X[tr], yy[tr]).predict(X[te])
+            return r2_pooled(yy, pred), len(frame)
+
+        r_all, n_all = cv_r2(D)
+        r_complete, n_complete = cv_r2(D.loc[complete])
+        rows.append(dict(target=y, n_all=n_all, n_complete=n_complete,
+                         r2_all=r_all, r2_complete=r_complete,
+                         complete_case_delta_r2=r_complete - r_all
+                         if np.isfinite(r_all) and np.isfinite(r_complete) else np.nan))
+    S = pd.DataFrame(rows)
+    S.to_csv(tab / "table_sensitivity_missingness.csv", index=False)
+    return S
+
+
 def md_table(df: pd.DataFrame) -> str:
     if df is None or df.empty:
         return "_(none)_"
@@ -1286,21 +1342,30 @@ def md_table(df: pd.DataFrame) -> str:
 # =============================================================================
 SHORT_T = {"n_peak": "ln N_peak", "evenness": "Evenness", "gamma": "ln \u03b3", "domega_median": "ln \u0394\u03c9",
            "r_overlap": "Overlap", "frac_low": "Low frac.", "frac_mid": "Mid frac.", "frac_high": "High frac.",
-           "w1_distance": "ln W1", "eta": "\u03b7"}
+           "shape_w1_distance": "ln W1", "shape_centroid": "Centroid",
+           "shape_skewness": "Skewness", "eta": "\u03b7"}
 SHORT_FAM = {"phosphate_arsenate_vanadate": "phosphate/As/V", "sulfide_selenide_telluride": "sulfide/Se/Te",
              "oxide_hydroxide": "oxide/hydroxide", "native_element": "native element"}
 SET_SHORT = [("Measurement (SNR, wavelength)", "Measurement"), ("Categorical (family, crystal system)", "Family + system"),
              ("Size / complexity", "Size"), ("Symmetry / group theory", "Symmetry"), ("Bond geometry", "Bond geometry"),
              ("Chemistry", "Comp.-derived chemistry"), ("Local environment (SOAP)", "SOAP"), ("All structure/chemistry", "All descriptors")]
 
-# 先验假设驱动的 headline 配对: 必须在看结果之前固定. 若是看过结果后才选的, 论文中须声明为探索性.
-# eta = N_peak/N_Raman 与 N_Raman 相关的描述符(raman_mode_fraction, degeneracy_fraction, ...)存在定义性耦合, 故不作 headline.
+# Main-figure pairs were selected after the full analysis for effect size and interpretability;
+# they are exploratory displays, not an independent confirmatory test.
+# eta = N_peak/N_Raman 与 N_Raman 相关的描述符存在定义性耦合, 故不作 headline.
 HEADLINE_PAIRS = [("mean_reduced_mass", "frac_low"), ("mean_reduced_mass", "n_peak"), ("mean_reduced_mass", "frac_high"),
-                  ("mean_delta_chi_bond", "w1_distance"), ("mixing_entropy", "gamma"), ("sigma_chi", "frac_high"),
-                  ("n_anion_group_types", "domega_median"), ("n_anion_group_types", "n_peak")]
-HEADLINE_MULTI = [("gamma", "mean_reduced_mass"), ("gamma", "sigma_chi"), ("gamma", "mixing_entropy"),
+                  ("mean_delta_chi_bond", "shape_w1_distance"), ("mixing_entropy", "gamma"), ("sigma_chi", "frac_high"),
+                  ("n_anion_group_types", "n_peak"), ("polymerization_index", "shape_centroid"),
+                  ("polymerization_index", "shape_skewness")]
+# NOTE: mixing_entropy is not a member of CORE_OLS / EXT_OLS, so it is never a term in the M2/M3
+# multivariable models -- only its bivariate (partial-Spearman) association is estimated, which is
+# already covered by the ("mixing_entropy", "gamma") entry in HEADLINE_PAIRS above. A multivariable
+# headline pair built on it (as an earlier version of this list had) can never be found in `S` and
+# is silently dropped by write_paper_results, quietly shrinking the reported headline set from 6
+# pairs to 5 without any warning -- so it is intentionally NOT listed here.
+HEADLINE_MULTI = [("gamma", "mean_reduced_mass"), ("gamma", "sigma_chi"),
                   ("n_peak", "mean_reduced_mass"), ("frac_low", "mean_reduced_mass"),
-                  ("w1_distance", "mean_delta_chi_bond")]
+                  ("shape_w1_distance", "mean_delta_chi_bond")]
 
 
 def tshort(c):
@@ -1312,8 +1377,7 @@ def fshort(f):
 
 
 def _finalize_figure(fig, layout=True):
-    """落实面板字母, 隐藏总标题, 按轴宽折行标题, 启用 constrained layout."""
-    import textwrap
+    """落实面板字母, 隐藏总标题, 启用 constrained layout."""
     for ax in fig.axes:
         _apply_panel(ax)
     lettered = [ax for ax in fig.axes if getattr(ax, "_panel_done", False)]
@@ -1338,13 +1402,6 @@ def _finalize_figure(fig, layout=True):
             fig.canvas.draw()                              # 先算出真实轴宽, 再折行标题
         except Exception:
             pass
-    w_in = fig.get_size_inches()[0]
-    for ax in fig.axes:
-        t = ax.get_title(loc="left")
-        if t and "\n" not in t:
-            ax.set_title(textwrap.fill(t, max(16, int(ax.get_position().width * w_in * 12.5))), loc="left")
-
-
 def figure_qa(fig, name, overlap_frac=0.15):
     """渲染后检查: (1) MathText 逐行可解析 (2) 任意两个文字对象的包围盒不重叠. 返回问题列表."""
     import itertools
@@ -1511,8 +1568,7 @@ def write_paper_results(out, args, n, par, S, Rt, Dt, Gdf, rho_gt, sens):
     lines = ["# Data-driven results statements\n",
              "Every sentence below is generated from this run's numbers. Mechanistic interpretation is intentionally NOT pre-written: "
              "add it to the manuscript only where the statements support it.\n",
-             f"Headline association pairs were fixed in code (HEADLINE_PAIRS) and are hypothesis-driven; if they were chosen after "
-             f"inspecting earlier results, report them as exploratory. n = {n}.\n"]
+             f"Main-figure association pairs were selected from the complete analysis for effect size and interpretability; treat them as exploratory displays, not confirmatory tests. n = {n}.\n"]
     lines += [f"- {s}" for s in _evidence_sentences(par, Rt, Dt, Gdf, rho_gt, sens)]
     (out / "paper_results.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -1521,11 +1577,11 @@ def write_paper_results(out, args, n, par, S, Rt, Dt, Gdf, rho_gt, sens):
 MAIN_CAPTIONS = {
     "Figure 1": "Study design. Raman spectra from the RRUFF Raman directory are linked to crystallographic and composition information from the RRUFF AMCSD directory; structural and composition-derived descriptors are then constructed for prediction. (a) Analysis framework; (b) quality-control funnel; (c) median standardised spectral profile per chemical family.",
     "Figure 2": "Group-theoretical mode availability versus observed peaks. (a) N_Raman against N_peak with the 1:1 line (all active modes resolved). (b, c) Partial Spearman association of symmetry descriptors with the peak-count residual given ln N_Raman, i.e. resolved peaks beyond what mode availability implies; the ratio eta = N_peak/N_Raman is deliberately not used because it is coupled to N_Raman by construction.",
-    "Figure 3": "Bond-geometry descriptors against spectral endpoints. Line: decile-binned median. Annotations: partial Spearman rho (adjusted for ln N_atom and ln SNR), 95% CI and BH-FDR q.",
-    "Figure 4": "Composition-derived chemistry descriptors against spectral endpoints (same conventions as Figure 3).",
-    "Figure 5": "Out-of-fold R2 (grouped 5-fold CV by chemical formula) for each predictor set and spectral endpoint. Negative values (blue) are worse than predicting the mean. Measurement = SNR + excitation wavelength; Family + system = chemical family and crystal system.",
+    "Figure 3": "Strongest bond-geometry associations with peak count, band fractions, and spectral distance. Points show observations; lines show decile-binned medians. Annotations report partial Spearman rho, 95% CI, and BH-FDR q.",
+    "Figure 4": "Strongest composition-derived associations with linewidth, spectral shape, and peak count. Weak or null exploratory pairs are retained in the full correlation table rather than the main figure.",
+    "Figure 5": "Out-of-fold R2 (grouped 5-fold CV by chemical formula) across the informative spectral endpoints. Measurement = SNR + excitation wavelength; categorical = chemical family + crystal system; eta is excluded because it is definitionally coupled to peak count and Raman-active mode count.",
     "Figure 6": "Joint held-out permutation importance (change in R2 when an entire descriptor group is permuted jointly). Values quantify predictive information, not causal effect.",
-    "Figure 7": "Proposed conceptual framework (hypothesis). Boxes are the analysed layers; arrows indicate the hypothesised direction and are tested only through the associations reported in Figures 2-6.",
+    "Figure 7": "Integrated findings: (a) incremental out-of-fold value beyond family + crystal system; (b) descriptor group most often ranked first by joint permutation; (c) measurement-only versus structure/chemistry predictive performance.",
 }
 SUPP_CAPTIONS = {
     "Figure S1": "Quality-control funnel and median standardised spectral profile per chemical family.",
@@ -1606,6 +1662,9 @@ def publication_figure_pipeline(out, args, R, D, funnel, par, cat, S, Rt, Dt, L,
     out = Path(out)
     for sub in ("main", "supplementary"):
         (out / "figures" / sub).mkdir(parents=True, exist_ok=True)
+    old_framework = out / "figures" / "main" / "Figure7_integrated_framework.png"
+    if old_framework.exists():
+        old_framework.unlink()
     W = 7.15                                              # 双栏图宽 (英寸)
 
     # # ---------------- Figure 1 ----------------
@@ -1780,23 +1839,25 @@ def publication_figure_pipeline(out, args, R, D, funnel, par, cat, S, Rt, Dt, L,
         ax.set_title(ttl, loc="left"); panel(ax, letter)
     _save_pubfig(fig, out, "Figure2_group_theory_ceiling")
 
-    # ---------------- Figures 3-4: bond geometry / chemistry ----------------
-    for name, pairs, size in (("Figure3_bond_geometry", [("mean_reduced_mass", "n_peak"), ("mean_reduced_mass", "frac_low"),
-                                                         ("mean_reduced_mass", "frac_high"), ("mean_delta_chi_bond", "w1_distance")], (W, 5.4)),
-                              ("Figure4_chemical_heterogeneity", [("mixing_entropy", "gamma"), ("sigma_chi", "frac_high"),
-                                                                  ("n_anion_group_types", "n_peak")], (W, 2.8))):
-        nc = 2 if len(pairs) == 4 else 3
-        fig, axs = plt.subplots(int(np.ceil(len(pairs) / nc)), nc, figsize=size, layout="constrained", squeeze=False)
-        for ax, (x, y), letter in zip(axs.ravel(), pairs, "abcd"):
+    # ---------------- Figures 3-4: strongest association displays ----------------
+    # Weak/null exploratory pairs remain in the full correlation table, but are not given main-figure space.
+    for name, pairs in (("Figure3_bond_geometry", [(x, y) for x, y in HEADLINE_PAIRS if FEAT[x].group == "bond"]),
+                         ("Figure4_chemical_heterogeneity", [(x, y) for x, y in HEADLINE_PAIRS if FEAT[x].group == "chem"])):
+        nc = 2 if len(pairs) <= 4 else 3
+        nr = int(np.ceil(len(pairs) / nc))
+        fig, axs = plt.subplots(nr, nc, figsize=(W, 2.7 * nr), layout="constrained", squeeze=False)
+        for ax, (x, y), letter in zip(axs.ravel(), pairs, "abcdef"):
             _scatter_binned(ax, D, par, x, y); panel(ax, letter, dx=-0.16)
+            # ax.set_title(f"{tshort(y)} versus {flabel(x)}", loc="left")
+            ax.set_title(f"{tshort(y)}", loc="left")
         for ax in axs.ravel()[len(pairs):]:
             ax.axis("off")
         _save_pubfig(fig, out, name)
 
     # ---------------- Figure 5: grouped-CV decomposition ----------------
     if Rt is not None and len(Rt):
-        kt = [t for t in ["n_peak", "gamma", "domega_median", "r_overlap", "frac_low", "frac_mid", "frac_high", "w1_distance"]
-              if t in set(Rt.target)]
+        kt = [t for t in ["n_peak", "evenness", "gamma", "domega_median", "r_overlap", "frac_low", "frac_mid", "frac_high",
+                  "shape_w1_distance", "shape_centroid", "shape_skewness"] if t in set(Rt.target)]
         fig, ax = plt.subplots(figsize=(W, 3.6), layout="constrained")
         rows = [(full, short) for full, short in SET_SHORT if full in set(Rt.feature_set)]
         M = np.array([Rt[Rt.feature_set == full].set_index("target").reindex(kt).r2.to_numpy(float) for full, _ in rows])
@@ -1807,7 +1868,7 @@ def publication_figure_pipeline(out, args, R, D, funnel, par, cat, S, Rt, Dt, L,
         #                title="Grouped-CV $R^2$ by predictor set")
 
         im = draw_heat(ax, M, None, [tshort(t) for t in kt], [s for _, s in rows], vmin=-lim, vmax=lim, fmt="{:.2f}", fs=6.4,
-                       )
+                   title="Grouped-CV $R^2$ by predictor set")
         
         fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02).set_label("out-of-fold $R^2$")
         # panel(ax, "a")
@@ -1815,7 +1876,8 @@ def publication_figure_pipeline(out, args, R, D, funnel, par, cat, S, Rt, Dt, L,
 
     # ---------------- Figure 6: joint group importance ----------------
     if Gdf is not None and len(Gdf):
-        kt = [t for t in ["n_peak", "gamma", "domega_median", "r_overlap", "frac_low", "frac_mid", "frac_high", "w1_distance"] if t in Gdf.columns]
+        kt = [t for t in ["n_peak", "evenness", "gamma", "domega_median", "r_overlap", "frac_low", "frac_mid", "frac_high",
+                  "shape_w1_distance", "shape_centroid", "shape_skewness"] if t in Gdf.columns]
         rws = [GROUP_LABEL[g] for g in GROUPS if GROUP_LABEL[g] in Gdf.index]
         A = Gdf.reindex(rws)[kt]
         fig, ax = plt.subplots(figsize=(W, 3.3), layout="constrained")
@@ -1827,30 +1889,40 @@ def publication_figure_pipeline(out, args, R, D, funnel, par, cat, S, Rt, Dt, L,
         
 
         im = draw_heat(ax, A.clip(lower=0).to_numpy(float), None, [tshort(t) for t in kt], rws,
-                       [GROUP_COLOR[g] for g in GROUPS if GROUP_LABEL[g] in rws], vmin=0,
-                       vmax=max(0.1, float(np.nanmax(A.to_numpy()))), cmap="YlOrRd", fmt="{:.2f}", annot_min=0.005, fs=6.4,
-                       )
+                   [GROUP_COLOR[g] for g in GROUPS if GROUP_LABEL[g] in rws], vmin=0,
+                   vmax=max(0.1, float(np.nanmax(A.to_numpy()))), cmap="YlOrRd", fmt="{:.2f}", annot_min=0.005, fs=6.4,
+                   title="Joint held-out permutation importance")
 
         fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02).set_label("$\\Delta R^2$")
         # panel(ax, "a")
         _save_pubfig(fig, out, "Figure6_group_importance")
 
-    # ---------------- Figure 7: conceptual framework ----------------
-    fig = plt.figure(figsize=(W, 4.3)); ax = fig.add_axes([0, 0, 1, 1]); ax.axis("off")
-    stages = [(0.04, 0.56, 0.26, 0.24, "Crystal structure", "size / complexity\nsymmetry / group theory\nbond geometry"),
-              (0.37, 0.56, 0.26, 0.24, "Composition-derived chemistry", "elemental composition\nsite mixing\nelectronegativity"),
-              (0.70, 0.56, 0.26, 0.24, "Raman mode space", "allowed modes\nfrequency distribution\nmode degeneracy"),
-              (0.22, 0.14, 0.26, 0.24, "Spectral complexity", "peak count\nspacing\nband fractions"),
-              (0.57, 0.14, 0.26, 0.24, "Band resolvability", "linewidth\noverlap\nresolved peaks")]
-    for x, y, w, h, title, body in stages:
-        ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=.012", fill=False, lw=1.0, ec="0.25"))
-        ax.text(x + w / 2, y + h - 0.055, title, ha="center", va="center", fontsize=9, fontweight="bold")
-        ax.text(x + w / 2, y + h / 2 - 0.01, body, ha="center", va="center", fontsize=7.4, linespacing=1.45)
-    for a, b in [((.31, .68), (.36, .68)), ((.64, .68), (.69, .68)), ((.83, .55), (.69, .39)), ((.45, .55), (.38, .39)), ((.49, .265), (.56, .265))]:
-        ax.annotate("", xy=b, xytext=a, arrowprops=dict(arrowstyle="->", lw=1.15))
-    # ax.text(0.5, 0.04, "Proposed framework (hypothesis): arrows are tested only via the associations in Figures 2-6",
-            # ha="center", va="center", fontsize=8.2, fontweight="bold")
-    _save_pubfig(fig, out, "Figure7_integrated_framework", layout=False)
+    # ---------------- Figure 7: integrated findings ----------------
+    fig, axs = plt.subplots(1, 3, figsize=(W, 3.6), layout="constrained")
+    if Dt is not None and len(Dt):
+        d = Dt[Dt.contrast == "All - Categorical"].set_index("target").reindex(kt).dropna(subset=["delta_r2"])
+        axs[0].barh(np.arange(len(d)), d.delta_r2, color="#D55E00")
+        axs[0].errorbar(d.delta_r2, np.arange(len(d)), xerr=[d.delta_r2 - d.ci_lo, d.ci_hi - d.delta_r2], fmt="none", color="0.2", capsize=2, lw=0.7)
+        axs[0].axvline(0, color="0.35", lw=0.7)
+        axs[0].set_yticks(np.arange(len(d)), [tshort(t) for t in d.index])
+        axs[0].set_xlabel("All descriptors - categorical baseline ($\\Delta R^2$)")
+    axs[0].set_title("Incremental value", loc="left"); panel(axs[0], "a")
+    if Gdf is not None and len(Gdf):
+        g = Gdf[kt].idxmax().value_counts().reindex([GROUP_LABEL[x] for x in GROUPS], fill_value=0)
+        axs[1].barh(np.arange(len(g)), g.values, color=[GROUP_COLOR[x] for x in GROUPS])
+        axs[1].set_yticks(np.arange(len(g)), [x.replace("Composition-derived ", "") for x in g.index])
+        axs[1].set_xlabel("Endpoints with largest group $\\Delta R^2$")
+    axs[1].set_title("Dominant descriptor group", loc="left"); panel(axs[1], "b")
+    if Rt is not None and len(Rt):
+        m = Rt[Rt.feature_set == "Measurement (SNR, wavelength)"].set_index("target").reindex(kt).dropna(subset=["r2"])
+        a = Rt[Rt.feature_set == "All structure/chemistry"].set_index("target").reindex(m.index)
+        axs[2].scatter(m.r2, a.r2, s=18, color="#0072B2")
+        lim = max(0.45, float(np.nanmax([m.r2.max(), a.r2.max()])))
+        axs[2].plot([0, lim], [0, lim], "--", color="0.45", lw=0.7)
+        axs[2].set_xlim(0, lim); axs[2].set_ylim(0, lim)
+        axs[2].set_xlabel("Measurement $R^2$"); axs[2].set_ylabel("Structure/chemistry $R^2$")
+    axs[2].set_title("Measurement versus structure", loc="left"); panel(axs[2], "c")
+    _save_pubfig(fig, out, "Figure7_integrated_findings")
 
     # ---------------- Supplementary ----------------
     fig = plt.figure(figsize=(W, 3.4), layout="constrained")
@@ -1884,7 +1956,7 @@ def publication_figure_pipeline(out, args, R, D, funnel, par, cat, S, Rt, Dt, L,
         Q = cat.pivot(index="factor", columns="target", values="q").reindex(index=facs, columns=tg)
         fig, ax = plt.subplots(figsize=(W, 3.2), layout="constrained")
         im = draw_heat(ax, M.to_numpy(float), Q.to_numpy(float), [tshort(t) for t in tg], list(M.index), vmin=0,
-                       vmax=max(0.3, float(np.nanmax(M.to_numpy()))), cmap="Purples", fmt="{:.2f}", fs=6.2,
+                   vmax=max(0.3, float(np.nanmax(M.to_numpy()))), cmap="Purples", fmt="{:.3f}", fs=6.2,
                        title="Kruskal-Wallis $\\eta^2_H$")
         fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02).set_label("$\\eta^2_H$")
         panel(ax, "a")
@@ -2009,19 +2081,19 @@ def write_methods(out, args, n, gcol, funnel, n_feats):
 
 **Study design and QC.** The analysis began with the complete RRUFF-derived cohort and retained spectra with quality in {{{', '.join(args.qualities)}}}, SNR >= {args.min_snr:g}, at least {args.min_peaks} detected peaks, and {args.orientation} orientation (final n = {n}). The grouping unit for all resampling-based inference and prediction was chemical formula, preventing replicate spectra of the same composition from being split across folds. Because the minimum-peak criterion conditions on a response-related quantity, sensitivity analyses repeated the association screen at SNR thresholds of 10 and 40 and peak-count thresholds of 2 and 5.
 
-**Mechanistic feature hierarchy.** Structural and composition-derived descriptors were explicitly partitioned into size/complexity, symmetry/group theory, bond geometry, composition-derived chemistry, and local environment (SOAP). Group-theoretical descriptors were retained only when the reported crystallographic symmetry was internally consistent; otherwise the corresponding symmetry block was masked. Spectral endpoints represented complementary aspects of band complexity and resolvability: peak count, intensity evenness, mean linewidth, median peak spacing, peak overlap, low/mid/high spectral fractions, and Wasserstein distance. Mapping efficiency eta = N_peak/N_Raman was used only as an inferential endpoint and excluded from machine-learning predictors to avoid definitional leakage.
+**Mechanistic feature hierarchy.** Structural and composition-derived descriptors were explicitly partitioned into size/complexity, symmetry/group theory, bond geometry, composition-derived chemistry, and local environment (SOAP). Group-theoretical descriptors were retained only when the reported crystallographic symmetry was internally consistent; otherwise the corresponding symmetry block was masked. Spectral endpoints represented complementary aspects of band complexity and resolvability: peak count, intensity evenness, mean linewidth, median peak spacing, peak overlap, low/mid/high spectral fractions, Wasserstein distance, spectral centroid, and spectral skewness. Mapping efficiency eta = N_peak/N_Raman was used only as an inferential endpoint and excluded from machine-learning predictors to avoid definitional leakage.
 
 **Primary association analysis.** Rank-based partial correlations adjusted for ln N_atom and ln SNR were used to separate structural effects from size and measurement quality. Confidence intervals were calculated on the rank scale and p-values were controlled by Benjamini–Hochberg FDR at {FDR_ALPHA}. Categorical effects were quantified with Kruskal–Wallis eta-squared. The primary interpretation emphasizes effect size and confidence intervals rather than significance alone.
 
 **Multivariable inference.** Standardised OLS models were fitted as a core model (M1), an extended mechanistic model (M2), and an extended model with chemical-family fixed effects (M3). Chemical-formula cluster-robust standard errors were used for inference. Persistence of an effect from M2 to M3 was used as a within-family robustness check, not as evidence of causality. VIF diagnostics were retained to monitor collinearity.
 
-**Predictive validation and incremental value.** HistGradientBoosting regressors were evaluated using repeated {args.cv_folds}-fold grouped CV. All preprocessing was learned within training folds only. Out-of-fold R2 and paired R2 differences were quantified with chemical-formula cluster bootstrap confidence intervals. Two baselines were prespecified: measurement conditions (SNR and excitation wavelength) and categorical descriptors (chemical family and crystal system). The key publication comparison is the incremental dR2 of all structure/chemistry descriptors over the categorical baseline. Leave-one-family-out validation was used as an extrapolation stress test and is reported as a secondary generalisation analysis.
+**Predictive validation and incremental value.** HistGradientBoosting regressors were evaluated using repeated {args.cv_folds}-fold grouped CV. All preprocessing was learned within training folds only. Out-of-fold R2 and paired R2 differences were quantified with chemical-formula cluster bootstrap confidence intervals. Two baselines were prespecified: measurement conditions (SNR and excitation wavelength) and categorical descriptors (chemical family and crystal system). The primary publication comparison is the incremental dR2 of all structure/chemistry descriptors over the categorical baseline. The main synthesis emphasizes endpoints with positive incremental evidence, and eta is excluded because it is definitionally coupled to N_peak and N_Raman. Leave-one-family-out validation was used as an extrapolation stress test and is reported as a secondary generalisation analysis.
 
 **Feature-group attribution.** Single-feature and joint group permutation importance were computed on held-out folds. Joint permutation preserves within-group feature covariance and asks whether an entire mechanistic descriptor class contributes out-of-sample information. Drop-group ablation provides a complementary dR2 estimate.
 
 **Sparse mechanistic models.** Nested grouped-CV Lasso used the one-standard-error rule to obtain compact relations. Selection frequency was estimated by chemical-formula cluster bootstrap. Missingness indicators are labelled explicitly as “Missingness: ...” and are interpreted as data-availability signals rather than physical descriptors.
 
-**Latent structure and robustness.** PLS cumulative Q2 was estimated under grouped CV, with imputation/standardisation fitted within each training fold. QC sensitivity was used as a robustness check. UMAP, when requested, is exploratory only and is not used for inferential conclusions.
+**Latent structure and robustness.** PLS cumulative Q2 was estimated under grouped CV, with imputation/standardisation fitted within each training fold. QC sensitivity was used as a robustness check. The main-figure association displays were selected after the complete analysis for effect size and interpretability and are therefore exploratory; the full partial-correlation matrix and all weak/null pairs remain available in the supplementary outputs. UMAP, when requested, is exploratory only and is not used for inferential conclusions.
 """
     (out / "methods_text.md").write_text(txt, encoding="utf-8")
 
@@ -2073,13 +2145,15 @@ def main(argv=None) -> int:
     gcol = group_column(D)
     feats = [f.name for f in FEATURES if f.name in D and D[f.name].notna().sum() >= 30 and D[f.name].nunique() > 1]
     tg = [t.name for t in TARGETS if t.name in D and D[t.name].notna().sum() >= 30]
+    mtg = [t for t in tg if t not in ML_EXCLUDE]            # predictive spectral endpoints (不含 eta)
     absent = [f.name for f in FEATURES if f.name not in feats]
     if absent:
         print(f"[warning] descriptors absent/constant and skipped: {absent}")
     covars = [c for c in COVARS if c in D]
     rec.to_csv(tab / "table_transforms.csv", index=False)
     D.to_csv(tab / "analysis_frame_transformed.csv", index=False)
-    print(f"n = {len(D)}, {len(feats)} descriptors, {len(tg)} spectral targets, grouping = {gcol}")
+    print(f"n = {len(D)}, {len(feats)} descriptors, {len(mtg)} predictive spectral endpoints + "
+          f"{len(tg) - len(mtg)} inferential-only target (eta), grouping = {gcol}")
     print(f"  symmetry_consistent=False: {int((~R['symmetry_consistent']).sum())} rows (group-theory columns masked)")
 
     print("[S0] cohort");                 step0_cohort(R, D, funnel, tg, save, tab)
@@ -2088,7 +2162,6 @@ def main(argv=None) -> int:
     print("[S3] key relationships");      step3_key_scatter(D, par, raw, feats, save, tab)
     print("[S4] group-theory ceiling");   rho_gt = step4_group_theory(R, save, tab)
     print("[S5] regression");             S = step5_regression(D, tg, gcol, save, tab, rep)
-    mtg = [t for t in tg if t not in ML_EXCLUDE]            # 机器学习环节的目标 (不含 eta)
     print("[S6] predictive power (grouped CV)")
     Rt, Dt, oof_all = step6_predictive(D, feats, mtg, gcol, args, save, tab)
     print("[S6b] leave-one-family-out");  L, G = step6b_lofo(D, feats, mtg, gcol, args, oof_all, tab)
@@ -2098,6 +2171,7 @@ def main(argv=None) -> int:
     sens = None
     if not (args.fast or args.skip_sensitivity):
         print("[S10] QC sensitivity");    sens = step10_sensitivity(raw_df, args, feats, tg, covars, tab)
+        step10_missingness_sensitivity(D, feats, mtg, gcol, args, tab)
 
     # 文本产出先写 (不依赖绘图), 再出投稿图: 出图失败不会丢失 summary / methods
     write_summary(out, args, funnel, len(D), gcol, par, cat, S, Rt, Dt, G, lasso, Fdf, Gdf, q2, sens, rho_gt, mtg)

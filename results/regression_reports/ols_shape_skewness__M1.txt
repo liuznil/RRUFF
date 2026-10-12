@@ -1,0 +1,16 @@
+M1 core: z(Spectral skewness) ~ n_atom_primitive + cv_bond + sigma_chi + soap_intra_species_dispersion
+n=1800, R2=0.185, adj R2=0.183, SE=cluster (G=1736 clusters)
+predictors z-scored, response z-scored: coefficients are standardised betas
+
+                                 beta      se       p   ci_lo   ci_hi
+const                          0.0000  0.0218  1.0000 -0.0427  0.0427
+n_atom_primitive              -0.2203  0.0266  0.0000 -0.2724 -0.1683
+cv_bond                       -0.0554  0.0235  0.0187 -0.1016 -0.0093
+sigma_chi                     -0.3272  0.0299  0.0000 -0.3859 -0.2685
+soap_intra_species_dispersion  0.1174  0.0266  0.0000  0.0652  0.1696
+
+VIF (>5 worrying, >10 severe):
+n_atom_primitive                 1.30
+cv_bond                          1.04
+sigma_chi                        1.06
+soap_intra_species_dispersion    1.24

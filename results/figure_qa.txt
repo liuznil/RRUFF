@@ -4,7 +4,7 @@ Figure3_bond_geometry: 0 overlapping text pairs
 Figure4_chemical_heterogeneity: 0 overlapping text pairs
 Figure5_grouped_cv_decomposition: 0 overlapping text pairs
 Figure6_group_importance: 0 overlapping text pairs
-Figure7_integrated_framework: 0 overlapping text pairs
+Figure7_integrated_findings: 0 overlapping text pairs
 FigureS1_qc_and_family_profile: 0 overlapping text pairs
 FigureS2_full_partial_correlations: 0 overlapping text pairs
 FigureS3_categorical_effects: 0 overlapping text pairs

@@ -622,7 +622,7 @@ def soap_environment_stats(vectors, symbols, tol: float = SOAP_ENV_TOL) -> dict:
     V = np.asarray(vectors, dtype=float)
     norms = np.linalg.norm(V, axis=1, keepdims=True)
     V = V / np.where(norms > 1e-12, norms, 1.0)
-    total, n_env, seps = 0.0, 0, []
+    total, n_env, seps, env_counts = 0.0, 0, [], []
     for s in sorted(set(symbols)):
         sub = V[[i for i, x in enumerate(symbols) if x == s]]
         total += float(((sub - sub.mean(axis=0)) ** 2).sum())
@@ -630,12 +630,25 @@ def soap_environment_stats(vectors, symbols, tol: float = SOAP_ENV_TOL) -> dict:
         for v in sub:
             if not any(np.linalg.norm(v - r) <= tol for r in reps):
                 reps.append(v)
+        env_counts.append(len(reps))
         n_env += len(reps)
         for a in range(len(reps)):
             for b in range(a + 1, len(reps)):
                 seps.append(float(np.linalg.norm(reps[a] - reps[b])))
-    return dict(intra_species_dispersion=total / len(V), n_env=n_env,
-                min_env_sep=min(seps) if seps else float("nan"))
+    sep = np.asarray(seps, dtype=float)
+    entropy_p = np.asarray(env_counts, dtype=float)
+    entropy_p /= entropy_p.sum()
+    return dict(
+        intra_species_dispersion=total / len(V),
+        n_env=n_env,
+        min_env_sep=float(np.min(sep)) if len(sep) else float("nan"),
+        pairwise_env_sep_mean=float(np.mean(sep)) if len(sep) else float("nan"),
+        pairwise_env_sep_median=float(np.median(sep)) if len(sep) else float("nan"),
+        pairwise_env_sep_q90=float(np.quantile(sep, 0.90)) if len(sep) else float("nan"),
+        pairwise_env_sep_q95=float(np.quantile(sep, 0.95)) if len(sep) else float("nan"),
+        pairwise_env_sep_max=float(np.max(sep)) if len(sep) else float("nan"),
+        env_count_entropy=float(-np.sum(entropy_p * np.log(entropy_p))),
+    )
 
 
 def soap_features(prim) -> dict:
@@ -727,10 +740,19 @@ class StructureFeatures:
     n_anion_group_types: int = 0
     anion_group_o_fraction: float = _NAN
     polymerization_index: float = _NAN
+    chemistry_status: str = "not_run"
+    bond_status: str = "not_run"
     # SOAP
     soap_intra_species_dispersion: float = _NAN
-    soap_n_env: int = 0
+    soap_n_env: float = _NAN
     soap_min_env_sep: float = _NAN
+    soap_pairwise_env_sep_mean: float = _NAN
+    soap_pairwise_env_sep_median: float = _NAN
+    soap_pairwise_env_sep_q90: float = _NAN
+    soap_pairwise_env_sep_q95: float = _NAN
+    soap_pairwise_env_sep_max: float = _NAN
+    soap_env_count_entropy: float = _NAN
+    soap_status: str = "not_run"
     # status
     ok: bool = False
     error: str = ""
@@ -846,14 +868,18 @@ def _compute(cif_path: Path, feat: StructureFeatures) -> None:
         feat.sigma_chi = float(np.sqrt(np.sum(fr * (chi - np.sum(fr * chi)) ** 2)))
         feat.mass_contrast = float(np.log(m.max() / m.min()))
         feat.family = classify_family(structure.composition)
+        feat.chemistry_status = "available"
     except Exception as e:
+        feat.chemistry_status = "extraction_failed"
         _err(feat, f"chem_failed: {e}")
 
     # ---- bonds ---------------------------------------------------------------------------
     try:
         for k, v in bond_features(structure).items():
             setattr(feat, k, v)
+        feat.bond_status = "available"
     except Exception as e:
+        feat.bond_status = "extraction_failed"
         _err(feat, f"bond_failed: {type(e).__name__}: {e}")
 
     # ---- SOAP ----------------------------------------------------------------------------
@@ -862,9 +888,19 @@ def _compute(cif_path: Path, feat: StructureFeatures) -> None:
         feat.soap_intra_species_dispersion = s["intra_species_dispersion"]
         feat.soap_n_env = s["n_env"]
         feat.soap_min_env_sep = s["min_env_sep"]
+        feat.soap_pairwise_env_sep_mean = s["pairwise_env_sep_mean"]
+        feat.soap_pairwise_env_sep_median = s["pairwise_env_sep_median"]
+        feat.soap_pairwise_env_sep_q90 = s["pairwise_env_sep_q90"]
+        feat.soap_pairwise_env_sep_q95 = s["pairwise_env_sep_q95"]
+        feat.soap_pairwise_env_sep_max = s["pairwise_env_sep_max"]
+        feat.soap_env_count_entropy = s["env_count_entropy"]
         if not prim_is_idealised:
+            feat.soap_status = "not_applicable_nonidealised_cell"
             _err(feat, "soap_on_non_idealised_cell")
+        else:
+            feat.soap_status = "available"
     except Exception as e:
+        feat.soap_status = "extraction_failed"
         _err(feat, f"soap_failed({type(e).__name__}): {str(e)[:150]}")
 
     # 'ok' = the symmetry / group-theory core succeeded (other blocks report via `error`)
@@ -894,11 +930,687 @@ def extract_directory(cif_dir: Path, out_csv: Path, n_jobs: int = 1) -> int:
     return len(feats)
 
 
-if __name__ == "__main__":
+# --------------------------------------------------------------------------------------
+# Reviewer-response supplementary analyses (merged from reviewer_supplement.py)
+# --------------------------------------------------------------------------------------
+# This block adds endpoint checks, model baselines, missingness/applicability, SOAP,
+# multi-output, preprocessing, mode-window, and W1-reference sensitivities. Dependencies
+# are imported only when these analyses are invoked, preserving the light extractor import.
+_REVIEWER_SUPPLEMENT_READY = False
+
+def _load_reviewer_supplement_dependencies() -> None:
+    global _REVIEWER_SUPPLEMENT_READY, pd, da, stats, wasserstein_distance
+    global RandomForestRegressor, NearestNeighbors, StandardScaler
+    global WINDOW_MAX, WINDOW_MIN, RamanSettings, _read_spectrum, compute_raman_features
+    global TARGETS, SOAP_RICH
+    if _REVIEWER_SUPPLEMENT_READY:
+        return
+
+    import pandas as pandas_module
+    from scipy import stats as scipy_stats
+    from scipy.stats import wasserstein_distance as scipy_wasserstein_distance
+    from sklearn.ensemble import RandomForestRegressor as ForestRegressor
+    from sklearn.neighbors import NearestNeighbors as NearestNeighborsModel
+    from sklearn.preprocessing import StandardScaler as FeatureScaler
+
+    if __package__:
+        from . import data_analysis as analysis_module
+        from .raman_features import (
+            WINDOW_MAX as window_max, WINDOW_MIN as window_min, RamanSettings as Settings,
+            _read_spectrum as read_spectrum, compute_raman_features as compute_features,
+        )
+    else:
+        import data_analysis as analysis_module
+        from raman_features import (
+            WINDOW_MAX as window_max, WINDOW_MIN as window_min, RamanSettings as Settings,
+            _read_spectrum as read_spectrum, compute_raman_features as compute_features,
+        )
+
+    pd = pandas_module
+    da = analysis_module
+    stats = scipy_stats
+    wasserstein_distance = scipy_wasserstein_distance
+    RandomForestRegressor = ForestRegressor
+    NearestNeighbors = NearestNeighborsModel
+    StandardScaler = FeatureScaler
+    WINDOW_MAX, WINDOW_MIN = window_max, window_min
+    RamanSettings = Settings
+    _read_spectrum = read_spectrum
+    compute_raman_features = compute_features
+    TARGETS = [target.name for target in da.TARGETS if target.name != "eta"]
+    SOAP_RICH = [
+        "soap_pairwise_env_sep_mean", "soap_pairwise_env_sep_median",
+        "soap_pairwise_env_sep_q90", "soap_pairwise_env_sep_q95",
+        "soap_pairwise_env_sep_max", "soap_env_count_entropy",
+    ]
+    _REVIEWER_SUPPLEMENT_READY = True
+
+def _r2(y: np.ndarray, pred: np.ndarray) -> float:
+    _load_reviewer_supplement_dependencies()
+    return da.r2_pooled(y, pred)
+
+
+def _summarise(y: np.ndarray, preds: np.ndarray, groups: np.ndarray,
+               boots: list[np.ndarray]) -> tuple[float, float, float]:
+    _load_reviewer_supplement_dependencies()
+    scores = np.asarray([_r2(y, p) for p in preds], dtype=float)
+    boot = da.boot_r2(y, preds, boots)
+    lo, hi = np.nanpercentile(boot, [2.5, 97.5])
+    return float(np.nanmean(scores)), float(lo), float(hi)
+
+
+def _category_matrix(train: pd.DataFrame, test: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    _load_reviewer_supplement_dependencies()
+    cols = [c for c in ("family", "crystal_system") if c in train]
+    tr = train[cols].fillna("unknown").astype(str)
+    te = test[cols].fillna("unknown").astype(str)
+    tr_ohe = pd.get_dummies(tr, prefix=cols, dtype=float)
+    te_ohe = pd.get_dummies(te, prefix=cols, dtype=float).reindex(
+        columns=tr_ohe.columns, fill_value=0.0
+    )
+    return tr_ohe.to_numpy(float), te_ohe.to_numpy(float)
+
+
+def _cv_predictions(
+    D: pd.DataFrame, y_name: str, Xcols: list[str], groups: np.ndarray,
+    folds_by_repeat: list[list[tuple[np.ndarray, np.ndarray]]], seed: int,
+    mode: str,
+) -> np.ndarray:
+    _load_reviewer_supplement_dependencies()
+    mask = D[y_name].notna().to_numpy()
+    frame = D.loc[mask].reset_index(drop=True)
+    y = frame[y_name].to_numpy(float)
+    grp = groups[mask]
+    preds = np.full((len(folds_by_repeat), len(frame)), np.nan)
+    for r, folds in enumerate(folds_by_repeat):
+        for tr, te in folds:
+            if mode in {"hgb", "combined"}:
+                Xtr = frame.iloc[tr][Xcols]
+                Xte = frame.iloc[te][Xcols]
+                if mode == "combined":
+                    ctrain, ctest = _category_matrix(frame.iloc[tr], frame.iloc[te])
+                    Xtr = np.column_stack([Xtr.to_numpy(float), ctrain])
+                    Xte = np.column_stack([Xte.to_numpy(float), ctest])
+                model = da.make_hgb(seed)
+                model.fit(Xtr, y[tr])
+                preds[r, te] = model.predict(Xte)
+            elif mode.startswith("knn"):
+                xtr = frame.iloc[tr][Xcols]
+                xte = frame.iloc[te][Xcols]
+                med = xtr.median().fillna(0.0)
+                a = xtr.fillna(med).to_numpy(float)
+                b = xte.fillna(med).to_numpy(float)
+                scaler = StandardScaler().fit(a)
+                a, b = scaler.transform(a), scaler.transform(b)
+                k = int(mode[3:])
+                nearest = NearestNeighbors(n_neighbors=min(k, len(tr))).fit(a)
+                _, inds = nearest.kneighbors(b)
+                preds[r, te] = y[tr][inds].mean(axis=1)
+            elif mode in {"native_missing", "median_only", "values_plus_mask", "mask_only"}:
+                raw_tr = frame.iloc[tr][Xcols]
+                raw_te = frame.iloc[te][Xcols]
+                med = raw_tr.median().fillna(0.0)
+                if mode == "native_missing":
+                    a, b = raw_tr.to_numpy(float), raw_te.to_numpy(float)
+                elif mode == "median_only":
+                    a = raw_tr.fillna(med).to_numpy(float)
+                    b = raw_te.fillna(med).to_numpy(float)
+                else:
+                    atr = raw_tr.fillna(med).to_numpy(float)
+                    ate = raw_te.fillna(med).to_numpy(float)
+                    mtr = raw_tr.isna().to_numpy(float)
+                    mte = raw_te.isna().to_numpy(float)
+                    if mode == "mask_only":
+                        a, b = mtr, mte
+                    else:
+                        a, b = np.column_stack([atr, mtr]), np.column_stack([ate, mte])
+                model = da.make_hgb(seed)
+                model.fit(a, y[tr])
+                preds[r, te] = model.predict(b)
+            else:
+                raise ValueError(f"Unknown CV mode: {mode}")
+    return y, grp, preds
+
+
+def run_predictor_baselines(D: pd.DataFrame, features: list[str], group_col: str,
+                            args: argparse.Namespace, out: Path) -> None:
+    _load_reviewer_supplement_dependencies()
+    rows, contrast_rows = [], []
+    for target in TARGETS:
+        if target not in D:
+            continue
+        mask = D[target].notna().to_numpy()
+        frame = D.loc[mask].reset_index(drop=True)
+        y = frame[target].to_numpy(float)
+        groups = frame[group_col].to_numpy()
+        folds = [da.group_folds(groups, args.folds, args.seed + r) for r in range(args.repeats)]
+        boots = da.make_boot_idx(groups, args.boot, args.seed + 97)
+        modes = [
+            ("Categorical only", [], "hgb"),
+            ("All numerical descriptors", features, "hgb"),
+            ("All descriptors + family and crystal system", features, "combined"),
+            ("Nearest mineral (k=1)", features, "knn1"),
+            ("Five-neighbour mineral similarity", features, "knn5"),
+        ]
+        predictions = {}
+        for label, cols, mode in modes:
+            if mode == "hgb" and not cols:
+                preds = np.full((args.repeats, len(frame)), np.nan)
+                for r, rf in enumerate(folds):
+                    for tr, te in rf:
+                        atr, ate = _category_matrix(frame.iloc[tr], frame.iloc[te])
+                        model = da.make_hgb(args.seed).fit(atr, y[tr])
+                        preds[r, te] = model.predict(ate)
+                yy, gg = y, groups
+            else:
+                yy, gg, preds = _cv_predictions(
+                    frame, target, cols, groups, folds, args.seed, mode
+                )
+            r2, lo, hi = _summarise(yy, preds, gg, boots)
+            rows.append(dict(target=target, model=label, n=len(yy), r2=r2, ci_lo=lo, ci_hi=hi))
+            predictions[label] = preds
+        for contrast, model, reference in [
+            ("All numerical + categories - All numerical", "All descriptors + family and crystal system",
+             "All numerical descriptors"),
+            ("All numerical + categories - categorical", "All descriptors + family and crystal system",
+             "Categorical only"),
+            ("All numerical - five-neighbour similarity", "All numerical descriptors",
+             "Five-neighbour mineral similarity"),
+            ("All numerical - nearest mineral", "All numerical descriptors", "Nearest mineral (k=1)"),
+        ]:
+            ref_score = float(np.mean([_r2(y, p) for p in predictions[model]]))
+            other_score = float(np.mean([_r2(y, p) for p in predictions[reference]]))
+            diffs = []
+            for idx in boots:
+                yyb = y[idx]
+                for p_model, p_ref in zip(predictions[model], predictions[reference]):
+                    diffs.append(_r2(yyb, p_model[idx]) - _r2(yyb, p_ref[idx]))
+            lo, hi = np.nanpercentile(diffs, [2.5, 97.5])
+            contrast_rows.append(dict(target=target, contrast=contrast,
+                                      delta_r2=ref_score - other_score, ci_lo=lo, ci_hi=hi))
+    pd.DataFrame(rows).to_csv(out / "table_reviewer_predictor_baselines.csv", index=False)
+    pd.DataFrame(contrast_rows).to_csv(out / "table_reviewer_baseline_differences.csv", index=False)
+
+
+def run_soap_richer_comparison(D: pd.DataFrame, features: list[str], group_col: str,
+                               args: argparse.Namespace, out: Path) -> None:
+    _load_reviewer_supplement_dependencies()
+    richer = [c for c in SOAP_RICH if c in D and D[c].notna().sum() >= 30 and D[c].nunique() > 1]
+    if not richer:
+        return
+    rows = []
+    for target in TARGETS:
+        if target not in D:
+            continue
+        mask = D[target].notna().to_numpy()
+        frame = D.loc[mask].reset_index(drop=True)
+        y = frame[target].to_numpy(float)
+        groups = frame[group_col].to_numpy()
+        folds = [da.group_folds(groups, args.folds, args.seed + r) for r in range(args.repeats)]
+        boots = da.make_boot_idx(groups, args.boot, args.seed + 173)
+        models = {
+            "Core numeric descriptors (three scalar SOAP summaries)": features,
+            "Core plus pairwise-distance SOAP statistics": features + richer,
+        }
+        preds_by_model = {}
+        for label, cols in models.items():
+            preds = np.full((args.repeats, len(frame)), np.nan)
+            for r, repeat in enumerate(folds):
+                for tr, te in repeat:
+                    model = da.make_hgb(args.seed).fit(frame.iloc[tr][cols], y[tr])
+                    preds[r, te] = model.predict(frame.iloc[te][cols])
+            preds_by_model[label] = preds
+            score, lo, hi = _summarise(y, preds, groups, boots)
+            rows.append(dict(target=target, feature_set=label, n=len(y), r2=score, ci_lo=lo, ci_hi=hi))
+        p0, p1 = preds_by_model["Core numeric descriptors (three scalar SOAP summaries)"], preds_by_model[
+            "Core plus pairwise-distance SOAP statistics"
+        ]
+        d0 = float(np.mean([_r2(y, p) for p in p1]) - np.mean([_r2(y, p) for p in p0]))
+        boot_d = []
+        for idx in boots:
+            boot_d.extend(_r2(y[idx], a[idx]) - _r2(y[idx], b[idx]) for a, b in zip(p1, p0))
+        lo, hi = np.nanpercentile(boot_d, [2.5, 97.5])
+        rows.append(dict(target=target, feature_set="Paired richer-SOAP increment", n=len(y),
+                         r2=d0, ci_lo=lo, ci_hi=hi))
+    pd.DataFrame(rows).to_csv(out / "table_soap_richer_comparison.csv", index=False)
+
+
+def run_missingness_sensitivity(D: pd.DataFrame, features: list[str], group_col: str,
+                                args: argparse.Namespace, out: Path) -> None:
+    _load_reviewer_supplement_dependencies()
+    miss_rows = []
+    for c in features:
+        group = da.fgroup(c)
+        status_col = {"chem": "chemistry_status", "bond": "bond_status", "soap": "soap_status"}.get(group)
+        vals = D[c]
+        if c in {"anion_group_o_fraction", "polymerization_index"}:
+            reasons = np.where(
+                vals.notna(), "available",
+                np.where((D.get("chemistry_status", "") == "available") &
+                         (D.get("n_anion_group_types", 0) == 0),
+                         "not_applicable_no_detected_oxyanion_group",
+                         "extraction_or_unresolved"))
+        elif c.startswith("soap_"):
+            reasons = np.where(
+                vals.notna(), "available",
+                np.where(D.get("soap_status", pd.Series("", index=D.index)).eq("extraction_failed"),
+                         "extraction_failed",
+                         "not_applicable_no_within_species_environment_pair"))
+        elif group == "bond":
+            failed = D.get("bond_status", pd.Series("", index=D.index)).eq("extraction_failed")
+            no_bonds = D.get("n_bonds", pd.Series(np.nan, index=D.index)).eq(0)
+            reasons = np.where(vals.notna(), "available",
+                               np.where(failed, "extraction_failed",
+                                        np.where(no_bonds, "not_applicable_no_bond_pairs",
+                                                 "unresolved_or_not_applicable")))
+        elif group == "sym":
+            status = D.get("group_theory_status", pd.Series("", index=D.index))
+            failed = status.eq("failed")
+            inconsistent = ~D.get("symmetry_consistent", pd.Series(True, index=D.index)).astype(bool)
+            reasons = np.where(vals.notna(), "available",
+                               np.where(failed, "extraction_failed",
+                                        np.where(inconsistent, "masked_inconsistent_symmetry",
+                                                 np.where(status.eq("skipped_no_symmetry"),
+                                                          "not_applicable_no_symmetry",
+                                                          "unresolved_or_not_applicable"))))
+        elif status_col and status_col in D:
+            reasons = np.where(vals.notna(), "available",
+                               np.where(D[status_col].eq("extraction_failed"),
+                                        "extraction_failed", "unresolved_or_not_applicable"))
+        else:
+            reasons = np.where(vals.notna(), "available", "unresolved_or_not_applicable")
+        for reason, n in pd.Series(reasons).value_counts().items():
+            miss_rows.append(dict(feature=c, descriptor_group=group, status=reason, n=int(n),
+                                  fraction=float(n / len(D))))
+    pd.DataFrame(miss_rows).to_csv(out / "table_feature_missingness_status.csv", index=False)
+
+    rows = []
+    modes = ["native_missing", "median_only", "values_plus_mask", "mask_only"]
+    for target in TARGETS:
+        if target not in D:
+            continue
+        m = D[target].notna().to_numpy()
+        frame = D.loc[m].reset_index(drop=True)
+        y = frame[target].to_numpy(float)
+        groups = frame[group_col].to_numpy()
+        folds = [da.group_folds(groups, args.folds, args.seed + r) for r in range(args.repeats)]
+        boots = da.make_boot_idx(groups, args.boot, args.seed + 301)
+        for mode in modes:
+            yy, gg, preds = _cv_predictions(
+                frame, target, features, groups, folds, args.seed, mode
+            )
+            score, lo, hi = _summarise(yy, preds, gg, boots)
+            rows.append(dict(target=target, representation=mode, n=len(yy),
+                             r2=score, ci_lo=lo, ci_hi=hi))
+    pd.DataFrame(rows).to_csv(out / "table_sensitivity_applicability.csv", index=False)
+
+
+def run_multioutput(D: pd.DataFrame, features: list[str], group_col: str,
+                    args: argparse.Namespace, out: Path) -> None:
+    _load_reviewer_supplement_dependencies()
+    targets = [t for t in TARGETS if t in D]
+    complete = D[targets].notna().all(axis=1)
+    frame = D.loc[complete].reset_index(drop=True)
+    if len(frame) < 100:
+        pd.DataFrame([dict(n_complete=len(frame), status="insufficient complete outcomes")]).to_csv(
+            out / "table_multioutput_comparison.csv", index=False
+        )
+        return
+    groups = frame[group_col].to_numpy()
+    folds = [da.group_folds(groups, args.folds, args.seed + r) for r in range(args.repeats)]
+    y = frame[targets].to_numpy(float)
+    pred_multi = np.full((args.repeats, len(frame), len(targets)), np.nan)
+    pred_separate = np.full_like(pred_multi, np.nan)
+    for r, repeat_folds in enumerate(folds):
+        for tr, te in repeat_folds:
+            raw_tr, raw_te = frame.iloc[tr][features], frame.iloc[te][features]
+            med = raw_tr.median().fillna(0.0)
+            Xtr = raw_tr.fillna(med).to_numpy(float)
+            Xte = raw_te.fillna(med).to_numpy(float)
+            scaler = StandardScaler().fit(Xtr)
+            Xtr, Xte = scaler.transform(Xtr), scaler.transform(Xte)
+            mu, sd = y[tr].mean(axis=0), y[tr].std(axis=0)
+            sd[sd == 0] = 1.0
+            yz = (y[tr] - mu) / sd
+            joint = RandomForestRegressor(
+                n_estimators=100, min_samples_leaf=3, max_features=0.7,
+                n_jobs=-1, random_state=args.seed + r
+            ).fit(Xtr, yz)
+            pred_multi[r, te] = joint.predict(Xte) * sd + mu
+            for j in range(len(targets)):
+                model = RandomForestRegressor(
+                    n_estimators=100, min_samples_leaf=3, max_features=0.7,
+                    n_jobs=-1, random_state=args.seed + r
+                ).fit(Xtr, yz[:, j])
+                pred_separate[r, te, j] = model.predict(Xte) * sd[j] + mu[j]
+    boots = da.make_boot_idx(groups, args.boot, args.seed + 401)
+    rows, difference_rows = [], []
+    for j, target in enumerate(targets):
+        for label, pred in (("Shared-partition multi-output RF", pred_multi[:, :, j]),
+                            ("Separate single-output RF", pred_separate[:, :, j])):
+            scores = np.asarray([da.r2_pooled(y[:, j], p) for p in pred])
+            bs = da.boot_r2(y[:, j], pred, boots)
+            rows.append(dict(target=target, model=label, n=len(frame), r2=float(scores.mean()),
+                             ci_lo=float(np.nanpercentile(bs, 2.5)),
+                             ci_hi=float(np.nanpercentile(bs, 97.5))))
+        score_multi = np.mean([da.r2_pooled(y[:, j], p) for p in pred_multi[:, :, j]])
+        score_separate = np.mean([da.r2_pooled(y[:, j], p) for p in pred_separate[:, :, j]])
+        diff_boot = []
+        for idx in boots:
+            diff_boot.extend(
+                da.r2_pooled(y[idx, j], a[idx]) - da.r2_pooled(y[idx, j], b[idx])
+                for a, b in zip(pred_multi[:, :, j], pred_separate[:, :, j])
+            )
+        lo, hi = np.nanpercentile(diff_boot, [2.5, 97.5])
+        difference_rows.append(dict(target=target, contrast="shared multi-output - separate",
+                                    delta_r2=score_multi - score_separate, ci_lo=lo, ci_hi=hi))
+    pd.DataFrame(rows).to_csv(out / "table_multioutput_comparison.csv", index=False)
+    pd.DataFrame(difference_rows).to_csv(out / "table_multioutput_differences.csv", index=False)
+
+
+def run_preprocessing_sensitivity(raw: pd.DataFrame, D: pd.DataFrame, features: list[str],
+                                  group_col: str, args: argparse.Namespace, out: Path) -> None:
+    _load_reviewer_supplement_dependencies()
+    has_spectrum = raw["raman_path"].notna().to_numpy()
+    subset = raw.loc[has_spectrum].copy().reset_index(drop=True)
+    D_subset = D.iloc[np.flatnonzero(has_spectrum)].reset_index(drop=True)
+    settings = {
+        "default": RamanSettings(),
+        "smooth_2x": RamanSettings(smoothing_window_fraction=2 / 100),
+        "strict_peak_detection": RamanSettings(min_height_frac=0.04, min_prominence_frac=0.03,
+                                                min_peak_distance_cm=4.0),
+        "broad_baseline": RamanSettings(baseline_window_fraction=2 / 40),
+    }
+    spectra = {}
+    for name, config in settings.items():
+        extracted = []
+        for row in subset.itertuples(index=False):
+            feat = compute_raman_features(
+                Path(row.raman_path), str(row.raman_quality), str(row.raman_orientation), config
+            )
+            extracted.append({
+                "n_peak": feat.n_peak, "gamma": feat.gamma,
+                "domega_median": feat.domega_median, "r_overlap": feat.r_overlap,
+                "s_peak": feat.s_peak, "n_low": feat.n_low, "n_mid": feat.n_mid,
+                "n_high": feat.n_high, "shape_w1_distance": feat.shape_w1_distance,
+                "shape_centroid": feat.shape_centroid, "shape_skewness": feat.shape_skewness,
+                "peak_positions_cm1": feat.peak_positions_cm1,
+            })
+        spectra[name] = pd.DataFrame(extracted)
+        spec = spectra[name]
+        spec["evenness"] = spec["s_peak"] / np.log(spec["n_peak"].where(spec["n_peak"] > 1))
+        for band in ("low", "mid", "high"):
+            spec[f"frac_{band}"] = spec[f"n_{band}"] / spec["n_peak"]
+    target_names = [
+        "n_peak", "evenness", "gamma", "domega_median", "r_overlap",
+        "frac_low", "frac_mid", "frac_high", "shape_w1_distance",
+        "shape_centroid", "shape_skewness",
+    ]
+    metadata = pd.read_csv(args.out / "tables" / "table_transforms.csv")
+    tf = metadata[metadata.kind == "target"].set_index("variable")["transform"].to_dict()
+    rows = []
+    for setting, spec in spectra.items():
+        for target in target_names:
+            raw_y = spec[target].replace([np.inf, -np.inf], np.nan)
+            transform = tf.get(target, "none")
+            y = np.log(raw_y.where(raw_y > 0)) if transform == "log" else raw_y
+            spectra[setting][f"{target}_transformed"] = y.to_numpy()
+    for target in target_names:
+        for setting, spec in spectra.items():
+            y0 = spectra["default"][f"{target}_transformed"]
+            y1 = spec[f"{target}_transformed"]
+            valid = np.isfinite(y0.to_numpy()) & np.isfinite(y1.to_numpy())
+            valid_idx = np.flatnonzero(valid)
+            part = D_subset.iloc[valid_idx].reset_index(drop=True)
+            y0v, y1v = y0.to_numpy()[valid], y1.to_numpy()[valid]
+            groups = part[group_col].to_numpy()
+            boots = da.make_boot_idx(groups, args.boot, args.seed + 501)
+            pred0 = np.full((args.repeats, len(part)), np.nan)
+            pred1 = np.full_like(pred0, np.nan)
+            for r in range(args.repeats):
+                for tr, te in da.group_folds(groups, args.folds, args.seed + r):
+                    model0 = da.make_hgb(args.seed).fit(part.iloc[tr][features], y0v[tr])
+                    model1 = da.make_hgb(args.seed).fit(part.iloc[tr][features], y1v[tr])
+                    pred0[r, te] = model0.predict(part.iloc[te][features])
+                    pred1[r, te] = model1.predict(part.iloc[te][features])
+            score0, lo0, hi0 = _summarise(y0v, pred0, groups, boots)
+            score1, lo1, hi1 = _summarise(y1v, pred1, groups, boots)
+            delta_boot = []
+            for idx in boots:
+                delta_boot.extend(
+                    da.r2_pooled(y1v[idx], p1[idx]) - da.r2_pooled(y0v[idx], p0[idx])
+                    for p0, p1 in zip(pred0, pred1)
+                )
+            dlo, dhi = np.nanpercentile(delta_boot, [2.5, 97.5])
+            rho = stats.spearmanr(y0v, y1v).statistic if len(y0v) > 5 else np.nan
+            raw_y = spec[target]
+            rows.append(dict(setting=setting, target=target, n_common=len(part),
+                             r2_default=score0, default_ci_lo=lo0, default_ci_hi=hi0,
+                             r2_setting=score1, setting_ci_lo=lo1, setting_ci_hi=hi1,
+                             delta_r2=score1 - score0, delta_ci_lo=dlo, delta_ci_hi=dhi,
+                             spearman_vs_default=float(rho),
+                             median=float(raw_y.median()), q25=float(raw_y.quantile(.25)),
+                             q75=float(raw_y.quantile(.75))))
+    pd.DataFrame(rows).to_csv(out / "tables" / "table_sensitivity_preprocessing.csv", index=False)
+    for setting, spec in spectra.items():
+        spec.assign(mineral=subset["mineral"], rruff_id=subset["rruff_id"]).to_csv(
+            out / "tables" / f"preprocessing_endpoints_{setting}.csv", index=False
+        )
+
+
+def run_mode_examples(raw: pd.DataFrame, out: Path) -> None:
+    _load_reviewer_supplement_dependencies()
+    curated = {
+        "Anatase": ("Six symmetry-allowed fundamentals: Eg ~144 and 197; B1g ~399 and 513; "
+                    "A1g ~519; Eg ~639 cm-1. The ~513/519 pair can merge near room temperature.",
+                    "Ohsaka et al. (1978), DOI:10.1002/jrs.1250070606"),
+        "Quartz": ("The strong alpha-quartz Raman line near 464 cm-1 is within the measurement window; "
+                   "additional lattice and internal modes contribute to the unrestricted count.",
+                   "Krishnan (1945), DOI:10.1038/155452a0"),
+        "Gypsum": ("Sulfate stretching/bending modes fall in the fingerprint region, whereas structural-water "
+                   "O-H stretching bands occur above 1300 cm-1 and are absent from the analyzed trace.",
+                   "Berenblut et al. (1971), DOI:10.1016/0584-8539(71)80238-6; "
+                   "Couty et al. (1983), DOI:10.1007/bf00309590"),
+    }
+    rows = []
+    for mineral, (assignment, source) in curated.items():
+        hit = raw[raw.mineral.str.casefold() == mineral.casefold()]
+        if hit.empty:
+            continue
+        row = hit.iloc[0]
+        feat = compute_raman_features(Path(row.raman_path), str(row.raman_quality),
+                                      str(row.raman_orientation))
+        rows.append(dict(
+            mineral=mineral, formula=row.formula, rruff_id=row.rruff_id,
+            n_raman_active_modes=int(row.n_raman_active_modes),
+            n_detected_peaks_100_1300=feat.n_peak,
+            detected_peak_positions_cm1=feat.peak_positions_cm1,
+            representative_assignment=assignment, assignment_source=source,
+            interpretation="Illustrative case study; database mode count is Gamma-point symmetry availability, "
+                            "not a frequency-resolved prediction of the measured spectrum.",
+        ))
+    pd.DataFrame(rows).to_csv(out / "tables" / "table_mode_assignment_examples.csv", index=False)
+
+
+def run_w1_reference_sensitivity(raw: pd.DataFrame, D: pd.DataFrame, features: list[str],
+                                 group_col: str, args: argparse.Namespace, out: Path) -> None:
+    _load_reviewer_supplement_dependencies()
+    """Compare the fixed uniform W1 endpoint with a train-fold empirical reference."""
+    grid = np.linspace(WINDOW_MIN, WINDOW_MAX, 481)
+    profiles = np.zeros((len(raw), len(grid)), dtype=float)
+    for i, row in enumerate(raw.itertuples(index=False)):
+        x, y = _read_spectrum(Path(row.raman_path))
+        order = np.argsort(x)
+        x, y = x[order], y[order]
+        keep = (x >= WINDOW_MIN) & (x <= WINDOW_MAX)
+        x, y = x[keep], y[keep]
+        if len(y) < 20:
+            profiles[i] = np.nan
+            continue
+        win = max(11, int(len(y) / 40) | 1)
+        baseline = np.asarray([
+            y[max(0, j - win):j + win + 1].min() for j in range(len(y))
+        ])
+        corrected = np.clip(y - baseline, 0, None)
+        profile = np.interp(grid, x, corrected)
+        total = profile.sum()
+        profiles[i] = profile / total if total > 0 else np.nan
+
+    uniform_weights = np.ones(len(grid), dtype=float)
+    uniform_distances = [
+        wasserstein_distance(grid, grid, u_weights=profile, v_weights=uniform_weights)
+        if np.isfinite(profile).all() else np.nan
+        for profile in profiles
+    ]
+    target_uniform = np.log(np.asarray(uniform_distances))
+    valid = np.isfinite(target_uniform) & np.isfinite(profiles).all(axis=1)
+    frame = D.loc[valid].reset_index(drop=True)
+    profiles = profiles[valid]
+    target_uniform = target_uniform[valid]
+    groups = frame[group_col].to_numpy()
+    uniform_pred = np.full((args.repeats, len(frame)), np.nan)
+    empirical_pred = np.full_like(uniform_pred, np.nan)
+    empirical_test_target = np.full_like(uniform_pred, np.nan)
+
+    for repeat in range(args.repeats):
+        folds = da.group_folds(groups, args.folds, args.seed + repeat)
+        for train_idx, test_idx in folds:
+            train_profiles = profiles[train_idx]
+            train_sum = train_profiles.sum(axis=0)
+            empirical_reference = train_sum / train_sum.sum()
+            train_target = np.log([
+                wasserstein_distance(grid, grid, u_weights=spectrum, v_weights=empirical_reference)
+                for spectrum in train_profiles
+            ])
+            test_target = np.log([
+                wasserstein_distance(grid, grid, u_weights=spectrum, v_weights=empirical_reference)
+                for spectrum in profiles[test_idx]
+            ])
+            X_train, X_test = frame.iloc[train_idx][features], frame.iloc[test_idx][features]
+            uniform_model = da.make_hgb(args.seed).fit(X_train, target_uniform[train_idx])
+            empirical_model = da.make_hgb(args.seed).fit(X_train, train_target)
+            uniform_pred[repeat, test_idx] = uniform_model.predict(X_test)
+            empirical_pred[repeat, test_idx] = empirical_model.predict(X_test)
+            empirical_test_target[repeat, test_idx] = test_target
+
+    boots = da.make_boot_idx(groups, args.boot, args.seed + 601)
+    uniform_score, uniform_lo, uniform_hi = _summarise(
+        target_uniform, uniform_pred, groups, boots
+    )
+    empirical_scores = [
+        da.r2_pooled(empirical_test_target[r], empirical_pred[r])
+        for r in range(args.repeats)
+    ]
+    empirical_boot = [
+        np.mean([
+            da.r2_pooled(empirical_test_target[r, idx], empirical_pred[r, idx])
+            for r in range(args.repeats)
+        ])
+        for idx in boots
+    ]
+    rho = stats.spearmanr(
+        np.tile(target_uniform, args.repeats), empirical_test_target.reshape(-1)
+    ).statistic
+    pd.DataFrame([
+        dict(reference="fixed uniform over 100-1300 cm^-1", n=len(frame),
+             r2=uniform_score, ci_lo=uniform_lo, ci_hi=uniform_hi,
+             rank_rho_vs_uniform=1.0),
+        dict(reference="training-fold pooled empirical spectrum", n=len(frame),
+             r2=float(np.mean(empirical_scores)),
+             ci_lo=float(np.nanpercentile(empirical_boot, 2.5)),
+             ci_hi=float(np.nanpercentile(empirical_boot, 97.5)),
+             rank_rho_vs_uniform=float(rho)),
+    ]).to_csv(out / "tables" / "table_w1_reference_sensitivity.csv", index=False)
+
+
+def reviewer_supplement_main(argv: list[str] | None = None) -> int:
+    _load_reviewer_supplement_dependencies()
+    parser = argparse.ArgumentParser(description="Run reviewer-response supplementary analyses")
+    parser.add_argument("--csv", type=Path, default=Path("results/dataset.csv"))
+    parser.add_argument("--out", type=Path, default=Path("results"))
+    parser.add_argument("--folds", type=int, default=5)
+    parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument("--boot", type=int, default=300)
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--skip-preprocessing", action="store_true")
+    parser.add_argument("--skip-models", action="store_true")
+    args = parser.parse_args(argv)
+    tab = args.out / "tables"
+    tab.mkdir(parents=True, exist_ok=True)
+    raw = da.read_raw(args.csv)
+    args.qualities = ["excellent", "fair"]
+    args.min_snr, args.min_peaks, args.orientation = 20.0, 3, "unoriented"
+    qc, _ = da.apply_qc(raw, args.qualities, args.min_snr, args.min_peaks, args.orientation, verbose=False)
+    _, D, _ = da.build_frames(qc)
+    group_col = da.group_column(D)
+    features = [f.name for f in da.FEATURES if f.name in D and D[f.name].notna().sum() >= 30 and D[f.name].nunique() > 1]
+
+    equations = [
+        ("n_peak", "N_peak = number of detected local maxima in 100 <= nu <= 1300 cm^-1"),
+        ("evenness", "E = -sum_i p_i ln(p_i) / ln(N_peak), p_i = peak area_i / sum_j peak area_j"),
+        ("gamma", "Gamma = median_i(w_i), where w_i is the width at 50% prominence from peak_widths"),
+        ("domega_median", "Delta_omega = median_i(nu_(i+1) - nu_i) for ordered detected peaks"),
+        ("r_overlap", "R_overlap = Gamma / Delta_omega_median"),
+        ("frac_low", "f_low = N_peak([100,400) cm^-1) / N_peak"),
+        ("frac_mid", "f_mid = N_peak([400,700) cm^-1) / N_peak"),
+        ("frac_high", "f_high = N_peak([700,1300] cm^-1) / N_peak; the terminal upper bound is inclusive"),
+        ("shape_w1_distance", "W1 = integral_[100,1300] |F_obs(nu)-F_unif(nu)| dnu; F_obs is the normalized baseline-corrected intensity distribution"),
+        ("shape_centroid", "mu = sum_i w_i nu_i / sum_i w_i, w_i = max(I_i - rolling_min_i, 0)"),
+        ("shape_skewness", "g1 = sum_i p_i(nu_i-mu)^3 / [sum_i p_i(nu_i-mu)^2]^(3/2), p_i = w_i/sum_j w_j"),
+    ]
+    pd.DataFrame(equations, columns=["endpoint", "definition"]).to_csv(
+        tab / "table_endpoint_equations.csv", index=False
+    )
+    ablation_path = tab / "table_cv_paired_differences.csv"
+    if ablation_path.exists():
+        ablation = pd.read_csv(ablation_path)
+        ablation = ablation[ablation.contrast.str.startswith("drop ")].copy()
+        ablation["group_removed"] = ablation["contrast"].str.replace("drop ", "", regex=False)
+        ablation.rename(columns={"delta_r2": "r2_loss", "ci_lo": "ci_lo", "ci_hi": "ci_hi"},
+                        inplace=True)
+        ablation[["target", "group_removed", "r2_loss", "ci_lo", "ci_hi"]].to_csv(
+            tab / "table_drop_group_complete.csv", index=False
+        )
+
+    run_mode_examples(qc, args.out)
+    run_w1_reference_sensitivity(qc, D, features, group_col, args, args.out)
+    if not args.skip_models:
+        run_predictor_baselines(D, features, group_col, args, tab)
+        run_soap_richer_comparison(D, features, group_col, args, tab)
+        run_missingness_sensitivity(D, features, group_col, args, tab)
+        run_multioutput(D, features, group_col, args, tab)
+        status_rows = []
+        for feature in ("soap_pairwise_env_sep_mean", "soap_pairwise_env_sep_median",
+                        "soap_pairwise_env_sep_q90", "soap_pairwise_env_sep_q95",
+                        "soap_pairwise_env_sep_max", "soap_env_count_entropy"):
+            if feature in D and feature not in features:
+                pass
+    if not args.skip_preprocessing:
+        run_preprocessing_sensitivity(qc, D, features, group_col, args, args.out)
+    return 0
+
+
+
+def _structure_feature_main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Extract structural features from CIF files")
     ap.add_argument("cif_dir", type=Path)
     ap.add_argument("-o", "--out", type=Path, default=Path("structure_features.csv"))
     ap.add_argument("-j", "--jobs", type=int, default=1)
-    a = ap.parse_args()
+    args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO)
-    log.info("wrote %d rows to %s", extract_directory(a.cif_dir, a.out, a.jobs), a.out)
+    log.info("wrote %d rows to %s", extract_directory(args.cif_dir, args.out, args.jobs), args.out)
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    # Keep the original CIF-extraction CLI; the explicit subcommand runs reviewer analyses.
+    import sys
+
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments and arguments[0] == "reviewer-supplement":
+        return reviewer_supplement_main(arguments[1:])
+    return _structure_feature_main(arguments)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
