@@ -84,6 +84,8 @@ class RamanFeatures:
     quality: str
     orientation: str
     wavelength: str
+    ideal_chemistry: str = ""
+    measured_chemistry: str = ""
     n_points: int = 0
     n_peak: int = 0
     s_peak: float = float("nan")
@@ -239,6 +241,21 @@ def _parse_meta_from_filename(path: Path):
         wavelength = parts[3]
     return mineral, rruff_id, wavelength
 
+
+def _read_header_metadata(path: Path) -> dict[str, str]:
+    metadata = {}
+    with open(path, "r", encoding="latin-1") as fh:
+        for line in fh:
+            if not line.startswith("##"):
+                if line.strip():
+                    break
+                continue
+            key, separator, value = line[2:].partition("=")
+            if separator:
+                metadata[key.strip().upper()] = value.strip()
+    return metadata
+
+
 def _read_spectrum(path: Path):
     xs, ys = [], []
     with open(path, "r", encoding="latin-1") as fh:
@@ -266,6 +283,9 @@ def compute_raman_features(path: Path, quality: str, orientation: str,
         quality=quality, orientation=orientation, wavelength=wavelength,
     )
     try:
+        metadata = _read_header_metadata(path)
+        feat.ideal_chemistry = metadata.get("IDEAL CHEMISTRY", "")
+        feat.measured_chemistry = metadata.get("MEASURED CHEMISTRY", "")
         x, y = _read_spectrum(path)
         if len(x) < 20:
             feat.error = "too_few_points"

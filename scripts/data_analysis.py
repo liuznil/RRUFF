@@ -29,6 +29,24 @@ Structural and composition-derived descriptors  ->  Raman-spectrum features : pu
 用法
   python scripts/data_analysis.py --csv results/dataset.csv --out results
   python scripts/data_analysis.py --fast          # 调试: 1 次重复 CV, 少量 bootstrap, 跳过消融/LOFO
+  python scripts/data_analysis.py reviewer-supplement --csv results/dataset.csv --out results
+                                                   # 运行审稿人回复用补充分析并更新 results/tables/
+                                                   # 可选参数: --folds, --repeats, --boot, --seed,
+                                                   #           --skip-preprocessing, --skip-models
+
+说明
+  不带子命令时运行主分析流程，生成论文主图、补充图和主分析表格。
+  使用 reviewer-supplement 子命令运行审稿人回复用的额外基线、缺失性、
+  SOAP、多输出和预处理敏感性分析；这些分析不会随主分析流程自动运行。
+  reviewer-supplement 生成的表格包括:
+    table_reviewer_predictor_baselines.csv
+    table_reviewer_baseline_differences.csv
+    table_soap_richer_comparison.csv
+    table_feature_missingness_status.csv
+    table_multioutput_comparison.csv
+    table_multioutput_differences.csv
+    table_sensitivity_preprocessing.csv
+    table_w1_reference_sensitivity.csv
 """
 from __future__ import annotations
 
@@ -1111,11 +1129,13 @@ def lasso_1se(X: pd.DataFrame, y, groups, k, seed, n_alpha=60):
 def lasso_nested_oof(X: pd.DataFrame, y, groups, k, seed):
     pred = np.full(len(y), np.nan)
     for tr, te in group_folds(groups, k, seed):
-        pr = Prep().fit(X.iloc[tr])
-        Xtr, Xte = pr.transform(X.iloc[tr]), pr.transform(X.iloc[te])
         mu, sd = y[tr].mean(), y[tr].std() or 1.0
         ys = (y[tr] - mu) / sd
+        # Inner CV receives raw outer-training data and fits preprocessing anew
+        # within each inner-training fold; outer preprocessing is only for refitting.
         relative_alpha = lasso_1se(X.iloc[tr].reset_index(drop=True), ys, groups[tr], k, seed + 1)
+        pr = Prep().fit(X.iloc[tr])
+        Xtr, Xte = pr.transform(X.iloc[tr]), pr.transform(X.iloc[te])
         amax = np.max(np.abs(Xtr.T @ (ys - ys.mean()))) / len(tr)
         alpha = relative_alpha * amax if np.isfinite(amax) and amax > 0 else 1.0
         pred[te] = Lasso(alpha=alpha, max_iter=20000).fit(Xtr, ys).predict(Xte) * sd + mu
@@ -1662,9 +1682,33 @@ def publication_figure_pipeline(out, args, R, D, funnel, par, cat, S, Rt, Dt, L,
     out = Path(out)
     for sub in ("main", "supplementary"):
         (out / "figures" / sub).mkdir(parents=True, exist_ok=True)
-    old_framework = out / "figures" / "main" / "Figure7_integrated_framework.png"
-    if old_framework.exists():
-        old_framework.unlink()
+    generated_figures = {
+        "main": (
+            "Figure1_framework_and_cohort",
+            "Figure2_group_theory_ceiling",
+            "Figure3_bond_geometry",
+            "Figure4_chemical_heterogeneity",
+            "Figure5_grouped_cv_decomposition",
+            "Figure6_group_importance",
+            "Figure7_integrated_findings",
+        ),
+        "supplementary": (
+            "FigureS1_qc_and_family_profile",
+            "FigureS2_full_partial_correlations",
+            "FigureS3_categorical_effects",
+            "FigureS4_regression_forest",
+            "FigureS5_lofo_extrapolation",
+            "FigureS6_sparse_pls_sensitivity",
+        ),
+    }
+    # Do not leave figures from an earlier run when an optional analysis is now
+    # unavailable.  Otherwise the output directory can contain a mixture of
+    # current and stale publication figures.
+    for sub, names in generated_figures.items():
+        for name in names:
+            (out / "figures" / sub / f"{name}.png").unlink(missing_ok=True)
+    # Remove the obsolete pre-pipeline filename as well.
+    (out / "figures" / "main" / "Figure7_integrated_framework.png").unlink(missing_ok=True)
     W = 7.15                                              # 双栏图宽 (英寸)
 
     # # ---------------- Figure 1 ----------------
@@ -2103,6 +2147,14 @@ def write_methods(out, args, n, gcol, funnel, n_feats):
 # =============================================================================
 def main(argv=None) -> int:
     global DPI, FIG_TITLES
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments and arguments[0] == "reviewer-supplement":
+        if __package__:
+            from . import structure_features
+        else:
+            import structure_features
+        return structure_features.reviewer_supplement_main(arguments[1:])
+
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--csv", type=Path, default=Path("results/dataset.csv"))
     ap.add_argument("--out", type=Path, default=Path("results"))
@@ -2122,7 +2174,7 @@ def main(argv=None) -> int:
     ap.add_argument("--dpi", type=int, default=300, help="PNG 分辨率")
     ap.add_argument("--fig-titles", action="store_true", help="在图内显示总标题 (默认不显示, 交给图注)")
     ap.add_argument("--paper-mode", action="store_true", default=True, help="生成论文核心综合图/表/结果摘要（默认开启）")
-    args = ap.parse_args(argv)
+    args = ap.parse_args(arguments)
     DPI, FIG_TITLES = args.dpi, args.fig_titles
     if args.fast:
         args.repeats, args.n_boot, args.n_perm, args.n_stab = 1, 100, 2, 30
@@ -2182,10 +2234,12 @@ def main(argv=None) -> int:
 
     try:
         publication_figure_pipeline(out, args, R, D, funnel, par, cat, S, Rt, Dt, L, G, lasso, C, Fq, q2, Gdf, rho_gt, sens, mtg)
-    except Exception:
+    except Exception as exc:
         import traceback
         traceback.print_exc()
-        print("[error] publication figure pipeline failed; analysis tables / summary were already written")
+        raise RuntimeError(
+            "publication figure pipeline failed; no stale publication figures were retained"
+        ) from exc
     qa_lines = [f"{n}: {k} overlapping text pairs" + ("".join(f"\n    - {i}" for i in iss) if iss else "") for n, k, iss in QA_LOG]
     (out / "figure_qa.txt").write_text("\n".join(qa_lines) + "\n", encoding="utf-8")
     n_bad = sum(1 for _, k, iss in QA_LOG if iss)

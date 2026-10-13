@@ -1247,6 +1247,12 @@ def run_missingness_sensitivity(D: pd.DataFrame, features: list[str], group_col:
 
 def run_multioutput(D: pd.DataFrame, features: list[str], group_col: str,
                     args: argparse.Namespace, out: Path) -> None:
+    """Compare native multi-output and single-output forests on identical folds.
+
+    Random forests support multiple regression targets natively; the primary
+    HistGradientBoostingRegressor does not, so this sensitivity uses forests for
+    both arms rather than wrapping a different estimator for the joint model.
+    """
     _load_reviewer_supplement_dependencies()
     targets = [t for t in TARGETS if t in D]
     complete = D[targets].notna().all(axis=1)

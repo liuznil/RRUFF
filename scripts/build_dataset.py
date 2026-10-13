@@ -76,6 +76,8 @@ RAMAN_RENAME = {
     "quality": "raman_quality",
     "orientation": "raman_orientation",
     "wavelength": "raman_wavelength",
+    "ideal_chemistry": "rruff_ideal_chemistry",
+    "measured_chemistry": "rruff_measured_chemistry",
     "n_points": "raman_n_points",
     "snr": "raman_snr",
     "ok": "raman_ok",
@@ -173,6 +175,55 @@ def _structure_category(error: str) -> str:
     return "no_atoms" if not error else "other"
 
 
+def _parse_composition(formula: str):
+    if not formula:
+        return None
+    from pymatgen.core import Composition
+
+    formula = formula.split(";", 1)[0].strip()
+    formula = formula.replace("Â·", "·").replace("\xb7", "·").replace("_", "")
+    formula = re.sub(r"\^\d+[+-]\^", "", formula)
+    composition = Composition({})
+    try:
+        for part in re.split(r"[·•]", formula):
+            part = part.strip()
+            if not part:
+                continue
+            multiplier = re.match(r"^(\d+(?:\.\d+)?)\s*(?=[A-Z\[(])", part)
+            factor = float(multiplier.group(1)) if multiplier else 1.0
+            composition += Composition(part[multiplier.end():] if multiplier else part) * factor
+    except (TypeError, ValueError):
+        return None
+    return composition if composition else None
+
+
+def _composition_match(sfeat: StructureFeatures, rfeat: RamanFeatures) -> tuple[str, str]:
+    amcsd_composition = _parse_composition(sfeat.formula)
+    if amcsd_composition is None:
+        return "unverified", "amcsd_formula_unparseable"
+
+    rruff_composition = None
+    formula_source = "unavailable"
+    for source, formula in (
+        ("measured", rfeat.measured_chemistry),
+        ("ideal", rfeat.ideal_chemistry),
+    ):
+        rruff_composition = _parse_composition(formula)
+        if rruff_composition is not None:
+            formula_source = source
+            break
+    if rruff_composition is None:
+        return "unverified", formula_source
+
+    amcsd_elements = {element.symbol for element in amcsd_composition.elements}
+    rruff_elements = {element.symbol for element in rruff_composition.elements}
+    if amcsd_elements == rruff_elements:
+        return "same_element_set", formula_source
+    if amcsd_elements & rruff_elements:
+        return "partial_element_overlap", formula_source
+    return "disjoint_element_sets", formula_source
+
+
 def pick_structure(paths: list[Path]):
     """Return (StructureFeatures | None, failure_category, failure_detail)."""
     first_err = first_cat = ""
@@ -233,13 +284,27 @@ def _process_one(task):
     rfeat, cat, detail = pick_raman(raman_tiers)
     if rfeat is None:
         return key, None, ("raman", cat, detail)
-    return key, merge_row(sfeat, rfeat, key), None
+    composition_status, formula_source = _composition_match(sfeat, rfeat)
+    if composition_status == "disjoint_element_sets":
+        return key, None, (
+            "matching",
+            "formula_element_conflict",
+            f"AMCSD formula {sfeat.formula!r} has no element in common with the "
+            f"RRUFF {formula_source} chemistry "
+            f"{(rfeat.measured_chemistry if formula_source == 'measured' else rfeat.ideal_chemistry)!r}",
+        )
+    row = merge_row(sfeat, rfeat, key)
+    row["composition_match_status"] = composition_status
+    row["rruff_formula_source"] = formula_source
+    row["amcsd_high_pt"] = _is_high_pt(sfeat.cif_path)
+    return key, row, None
 
 
 PREFERRED_COLUMNS = [
     # identity / matching
     "mineral", "mineral_norm", "rruff_mineral", "formula", "family", "amcsd_id", "rruff_id",
-    "cif_path", "raman_path",
+    "cif_path", "raman_path", "rruff_ideal_chemistry", "rruff_measured_chemistry",
+    "composition_match_status", "rruff_formula_source", "amcsd_high_pt",
     # parsing / disorder / status
     "structure_ok", "structure_error", "cif_repaired", "n_unknown_labels",
     "is_ordered", "n_disordered_sites", "mixing_entropy",
@@ -281,7 +346,19 @@ def expected_columns() -> set[str]:
     """Columns the merged table must contain, derived from the dataclasses (no hand-kept list)."""
     s = {STRUCT_RENAME.get(f.name, f.name) for f in fields(StructureFeatures)}
     r = {RAMAN_RENAME.get(f.name, f.name) for f in fields(RamanFeatures)}
-    return s | r | {"mineral_norm"}
+    return s | r | {
+        "mineral_norm", "composition_match_status", "rruff_formula_source", "amcsd_high_pt"
+    }
+
+
+def _ambiguity_detail(name: str, collisions: dict[str, set[str]]) -> str:
+    affected = {rid: names for rid, names in collisions.items() if name in names}
+    ids = ", ".join(sorted(affected))
+    names = ", ".join(sorted({candidate for candidates in affected.values() for candidate in candidates}))
+    return (
+        f"RRUFF identifier(s) {ids} occur under normalized mineral names {names}; "
+        "all affected candidate mappings rejected"
+    )
 
 
 # -----------------------------------------------------------------------------
@@ -302,7 +379,8 @@ def build(root: Path = DEFAULT_ROOT, n_jobs: int = 1, timeout_s: int = DEFAULT_T
     }
     if rejected_names:
         common = [name for name in common if name not in rejected_names]
-        print(f"Rejected ambiguous RRUFF-ID matches: {len(rejected_names)}")
+        print(f"Rejected ambiguous RRUFF IDs : {len(collisions)}")
+        print(f"Rejected candidate mappings : {len(rejected_names)}")
     print(f"AMCSD mineral names       : {len(cif_index)}")
     print(f"RRUFF Raman mineral names : {len(raman_index)}")
     print(f"Matched mineral names     : {len(common)}")
@@ -310,8 +388,7 @@ def build(root: Path = DEFAULT_ROOT, n_jobs: int = 1, timeout_s: int = DEFAULT_T
     tasks = [(k, cif_index[k], {t: list(v) for t, v in raman_index[k].items()}) for k in common]
     rows, failures = _run_with_timeout(tasks, n_jobs, timeout_s)
     failures.extend(
-        (name, "matching", "ambiguous_rruff_id",
-         "RRUFF identifier occurs under multiple mineral names; match rejected")
+        (name, "matching", "ambiguous_rruff_id", _ambiguity_detail(name, collisions))
         for name in sorted(rejected_names)
     )
 
@@ -394,6 +471,10 @@ def _report(df: pd.DataFrame, fail_df: pd.DataFrame, n_matched: int, out_path: P
     print(f"Matched mineral names : {n_matched}")
     print(f"Rows kept             : {len(df)}")
     print(f"Rows dropped          : {len(fail_df)}")
+    if "amcsd_high_pt" in df:
+        print(f"Selected high-P/T structures: {int(df['amcsd_high_pt'].sum())}")
+    if "composition_match_status" in df:
+        print("Formula audit         : " + str(df["composition_match_status"].value_counts().to_dict()))
     if len(fail_df):
         for (stage, cat), n in Counter(zip(fail_df["stage"], fail_df["category"])).most_common():
             print(f"    {stage:9s} {cat:22s} {n}")

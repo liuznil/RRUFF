@@ -37,7 +37,7 @@ polymorph or composition matches, including duplicate-ID cases such as R230009.
 To reproduce the additional analyses addressing the reviewer comments, run:
 
 ```bash
-python scripts/structure_features.py reviewer-supplement --csv results/dataset.csv --out results
+python scripts/data_analysis.py reviewer-supplement --csv results/dataset.csv --out results
 ```
 
 This uses repeated five-fold formula-grouped validation and 300 formula-cluster
